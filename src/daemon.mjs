@@ -35,6 +35,8 @@ const fateDb = JSON.parse(readFileSync(join(__dirname, "../data/fates.json"), "u
 const npcDb = JSON.parse(readFileSync(join(__dirname, "../data/npcs.json"), "utf-8"));
 const huntingLog = JSON.parse(readFileSync(join(__dirname, "../data/hunting-log.json"), "utf-8"));
 const mobMaps = JSON.parse(readFileSync(join(__dirname, "../data/mob-maps.json"), "utf-8"));
+const itemNodes = JSON.parse(readFileSync(join(__dirname, "../data/item-nodes.json"), "utf-8"));
+const allItemNames = JSON.parse(readFileSync(join(__dirname, "../data/item-names-all.json"), "utf-8"));
 
 // User-placed custom markers, persisted to disk: { mapId: [ {id, x, y, label, color} ] }
 const MARKERS_FILE = join(__dirname, "../custom-markers.json");
@@ -172,6 +174,35 @@ const server = createServer(async (req, res) => {
 			res.end();
 			return;
 		}
+	}
+	if (req.url.startsWith("/list")) {
+		// Import a Teamcraft list by id via Firestore REST (no auth — see project
+		// notes). Decode finalItems, keep gatherable ones, attach node locations.
+		const listId = new URL(req.url, "http://localhost").searchParams.get("id");
+		if (!listId) { res.writeHead(400); res.end("missing id"); return; }
+		try {
+			const fsUrl = `https://firestore.googleapis.com/v1/projects/ffxivteamcraft/databases/(default)/documents/lists/${encodeURIComponent(listId)}`;
+			const doc = await fetch(fsUrl).then((r) => r.json());
+			if (doc.error) { res.writeHead(404); res.end(JSON.stringify({ error: doc.error.message })); return; }
+			const fields = doc.fields ?? {};
+			const listName = fields.name?.stringValue ?? listId;
+			const finals = fields.finalItems?.arrayValue?.values ?? [];
+			const items = finals.map((v) => {
+				const f = v.mapValue.fields;
+				const id = Number(f.id?.integerValue ?? 0);
+				const amount = Number(f.amount?.integerValue ?? 0);
+				const done = Number(f.done?.integerValue ?? 0);
+				const nodes = itemNodes[id] ?? [];
+				const maps = [...new Set(nodes.map((n) => n.map))];
+				return { id, name: allItemNames[id] ?? itemNames[id] ?? `#${id}`, amount, done, gatherable: nodes.length > 0, maps, nodes };
+			});
+			res.writeHead(200, { "Content-Type": "application/json" });
+			res.end(JSON.stringify({ id: listId, name: listName, items }));
+		} catch (e) {
+			res.writeHead(502);
+			res.end(JSON.stringify({ error: e.message }));
+		}
+		return;
 	}
 	if (req.url === "/hunting-log") {
 		// Attach which maps each target mob appears on (for jump-to).

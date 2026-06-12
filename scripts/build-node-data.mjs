@@ -53,9 +53,25 @@ for (const id of itemIds) {
 	names[id] = items[id]?.en ?? `#${id}`;
 }
 
+// Full id->en name map (for Teamcraft list import, which can reference any item).
+const allNames = {};
+for (const [id, v] of Object.entries(items)) if (v.en) allNames[id] = v.en;
+writeFileSync(join(__dirname, "../data/item-names-all.json"), JSON.stringify(allNames));
+console.log(`all item names: ${Object.keys(allNames).length}`);
+
+// Reverse index: itemId -> [{node, map, x, y, type, level}] so a Teamcraft list
+// can be mapped to where each required item is gathered.
+const itemNodes = {};
+for (const [id, n] of Object.entries(out)) {
+	for (const itemId of [...n.items, ...n.hiddenItems]) {
+		(itemNodes[itemId] ??= []).push({ node: Number(id), map: n.map, x: n.x, y: n.y, type: n.type, level: n.level });
+	}
+}
+
 writeFileSync(join(__dirname, "../data/nodes.json"), JSON.stringify(out));
 writeFileSync(join(__dirname, "../data/item-names.json"), JSON.stringify(names));
-console.log(`nodes: ${Object.keys(out).length}, item names: ${itemIds.size}`);
+writeFileSync(join(__dirname, "../data/item-nodes.json"), JSON.stringify(itemNodes));
+console.log(`nodes: ${Object.keys(out).length}, item names: ${itemIds.size}, gatherable items: ${Object.keys(itemNodes).length}`);
 
 // --- Monsters: monsters.json keyed by mob name id (joins mobs.json), each with
 // positions [{map, zoneid, level, fate, x, y, z}] in in-game map coords.
