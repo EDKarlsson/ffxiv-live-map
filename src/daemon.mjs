@@ -46,6 +46,11 @@ const state = {
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
 
 const server = createServer(async (req, res) => {
+	if (req.url === "/favicon.ico") {
+		res.writeHead(204);
+		res.end();
+		return;
+	}
 	if (req.url === "/state") {
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(state));
@@ -85,7 +90,10 @@ const ci = new CaptureInterface({
 	bridgeTcpPort: BRIDGE_PORT,
 	filter: (_header, typeName) => WANTED.has(typeName),
 	logger: (p) => {
-		if (VERBOSE || p.type === "error" || p.type === "warn") console[p.type === "log" ? "info" : p.type](`[pcap] ${p.message}`);
+		// Always surface connection-progress and Deucalion debug lines — silence
+		// here previously hid an endless "waiting for bridge" retry loop.
+		const important = p.type === "error" || p.type === "warn" || /\[TCP\]|DEUCALION/.test(p.message);
+		if (VERBOSE || important) console[p.type === "log" ? "info" : p.type](`[pcap] ${p.message}`);
 	},
 });
 
@@ -128,6 +136,16 @@ ci.on("message", (m) => {
 
 ci.on("ready", async () => {
 	console.log("[pcap] opcodes/constants loaded, connecting to bridge...");
+	setTimeout(() => {
+		if (!state.connected) {
+			console.warn(
+				`[pcap] Still not connected after 15s. Check that something is listening:\n` +
+				`         lsof -nP -iTCP:${BRIDGE_PORT}\n` +
+				`       If Teamcraft holds the only client slot, start a second bridge on\n` +
+				`       another port (see README) and run with --bridge-port 31595.`
+			);
+		}
+	}, 15000);
 	try {
 		await ci.start();
 		state.connected = true;
