@@ -159,6 +159,12 @@ const map = L.map("map", { crs: L.CRS.Simple, minZoom: -2, maxZoom: 3, zoomSnap:
 const bounds = [[0, 0], [IMG, IMG]];
 map.fitBounds(bounds);
 
+// Dedicated pane for the base map image, below the overlay pane (z 400) so
+// vector overlays (spawn-area circles, route lines) always render on top of it.
+// Without this, the image loads ~1s after the circles and paints over them.
+map.createPane("basemap");
+map.getPane("basemap").style.zIndex = 250;
+
 let overlay = null;
 let marker = null;
 let viewedMap = null;  // map entry currently displayed
@@ -189,6 +195,7 @@ const layers = {
 	min: L.layerGroup().addTo(map),
 	btn: L.layerGroup().addTo(map),
 	fsh: L.layerGroup(),
+	areas: L.layerGroup().addTo(map), // spawn-radius circles (own layer so they're toggleable & stable)
 	fates: L.layerGroup(),
 	npcs: L.layerGroup().addTo(map),
 };
@@ -196,6 +203,7 @@ L.control.layers(null, {
 	"Miner nodes": layers.min,
 	"Botanist nodes": layers.btn,
 	"Fishing spots": layers.fsh,
+	"Spawn areas": layers.areas,
 	"FATEs": layers.fates,
 }, { collapsed: true }).addTo(map);
 
@@ -273,11 +281,11 @@ async function loadNodes(m) {
 		const group = n.type <= 1 ? layers.min : n.type <= 3 ? layers.btn : layers.fsh;
 		group.addLayer(mk);
 		if (n.radius > 0) {
-			group.addLayer(L.circle(ll, {
+			layers.areas.addLayer(L.circle(ll, {
 				radius: n.radius * (m.size_factor / 100),
 				color: n.type <= 1 ? "#e8a33d" : n.type <= 3 ? "#6dbf6d" : "#5da9d6",
-				weight: 2, opacity: 0.6, dashArray: "1 6", lineCap: "round",
-				fillOpacity: 0.07, interactive: false,
+				weight: 2, opacity: 0.7, dashArray: "2 6", lineCap: "round",
+				fillOpacity: 0.08, interactive: false,
 			}));
 		}
 	}
@@ -697,7 +705,7 @@ function viewMap(m) {
 	if (!m || viewedMap?.id === m.id) { refreshMarker(); return; }
 	viewedMap = m;
 	if (overlay) { overlay.remove(); overlay = null; }
-	overlay = L.imageOverlay(m.image, bounds).addTo(map);
+	overlay = L.imageOverlay(m.image, bounds, { pane: "basemap" }).addTo(map);
 	map.fitBounds(bounds);
 	document.getElementById("zoneName").textContent = `Map #${m.id} (territory ${m.territory_id})`;
 	document.getElementById("mapPicker").value = String(m.id);
