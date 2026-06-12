@@ -62,6 +62,10 @@
 		border: 3px solid #ffd470; border-radius: 50%;
 		box-shadow: 0 0 8px #ffd470; box-sizing: border-box;
 	}
+	.route-num {
+		width: 20px; height: 20px; border-radius: 50%; background: #2ecc71; color: #08240f;
+		border: 2px solid #fff; font: 700 11px/18px system-ui; text-align: center; box-shadow: 0 0 4px rgba(0,0,0,.6);
+	}
 	#timedPanel { max-height: 30vh; overflow-y: auto; }
 	#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
@@ -105,6 +109,17 @@
 		<button id="listImport">Import</button>
 		<div id="listInfo" class="muted"></div>
 		<div id="listItems"></div>
+	</details>
+	<details><summary>Farming route</summary>
+		<select id="routeSource">
+			<option value="min">Miner nodes</option>
+			<option value="btn">Botanist nodes</option>
+			<option value="all">All gathering nodes</option>
+			<option value="list">Teamcraft list nodes</option>
+		</select>
+		<button id="routePlan">Plan route</button>
+		<button id="routeClear">Clear</button>
+		<div id="routeInfo" class="muted"></div>
 	</details>
 	<details><summary>Custom markers</summary>
 		<label><input type="checkbox" id="placeToggle"> Click map to place</label>
@@ -220,10 +235,12 @@ function nodePopup(n) {
 	return `<b>${TYPE_NAMES[n.type]}</b> <span class="nlvl">Lv${n.level} · (${n.x}, ${n.y})</span><br>${items}${hidden}${timed}`;
 }
 
+let nodeData = []; // gathering nodes on the viewed map (for route planning)
 async function loadNodes(m) {
 	Object.values(layers).forEach((l) => l.clearLayers());
 	timedMarkers = [];
 	const nodes = await fetch(`/nodes?map=${m.id}`).then((r) => r.json());
+	nodeData = nodes;
 	for (const n of nodes) {
 		const ll = coordLL(n.x, n.y);
 		const mk = L.marker(ll, {
@@ -396,6 +413,81 @@ function huntTargetMaps(mobId) {
 }
 buildHunt();
 
+// --- Farming route (TSP: nearest-neighbor + 2-opt over node coords) -------------
+const routeLayer = L.layerGroup().addTo(map);
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+function tour(points, start) {
+	if (points.length < 2) return points.slice();
+	// Nearest-neighbor seed
+	const remaining = points.slice();
+	const route = [];
+	let cur = start ?? remaining.shift();
+	route.push(cur); // seed node is part of the route (bug if only pushed when start set)
+	while (remaining.length) {
+		let bi = 0, bd = Infinity;
+		remaining.forEach((p, i) => { const d = dist(cur, p); if (d < bd) { bd = d; bi = i; } });
+		cur = remaining.splice(bi, 1)[0];
+		route.push(cur);
+	}
+	// 2-opt improvement (open path; keep index 0 fixed if it's the start)
+	const fixed = start ? 1 : 0;
+	let improved = true;
+	while (improved) {
+		improved = false;
+		for (let i = fixed; i < route.length - 1; i++) {
+			for (let k = i + 1; k < route.length; k++) {
+				const a = route[i - 1] ?? route[i], b = route[i];
+				const c = route[k], d = route[k + 1];
+				const before = dist(a, b) + (d ? dist(c, d) : 0);
+				const after = dist(a, c) + (d ? dist(b, d) : 0);
+				if (after + 1e-9 < before) {
+					let lo = i, hi = k;
+					while (lo < hi) { [route[lo], route[hi]] = [route[hi], route[lo]]; lo++; hi--; }
+					improved = true;
+				}
+			}
+		}
+	}
+	return route;
+}
+
+function planRoute() {
+	routeLayer.clearLayers();
+	const src = document.getElementById("routeSource").value;
+	const info = document.getElementById("routeInfo");
+	let pts = [];
+	if (src === "list") {
+		if (!listData) { info.textContent = "import a Teamcraft list first"; return; }
+		const seen = new Set();
+		for (const it of listData.items) for (const n of it.nodes ?? []) {
+			if (n.map === viewedMap.id && !seen.has(n.node)) { seen.add(n.node); pts.push({ x: n.x, y: n.y }); }
+		}
+	} else {
+		pts = nodeData.filter((n) => src === "all" ? n.type <= 3 : src === "min" ? n.type <= 1 : (n.type === 2 || n.type === 3))
+			.map((n) => ({ x: n.x, y: n.y }));
+	}
+	if (pts.length < 2) { info.textContent = `need 2+ nodes (found ${pts.length})`; return; }
+	const start = (playerMap && viewedMap && playerMap.id === viewedMap.id && lastPos)
+		? { x: lastPos.mapX, y: lastPos.mapY, isStart: true } : null;
+	const ordered = tour(pts, start);
+	const latlngs = ordered.map((p) => coordLL(p.x, p.y));
+	routeLayer.addLayer(L.polyline(latlngs, { color: "#2ecc71", weight: 2.5, opacity: 0.85, dashArray: "6 6" }));
+	let total = 0;
+	for (let i = 1; i < ordered.length; i++) total += dist(ordered[i - 1], ordered[i]);
+	ordered.forEach((p, i) => {
+		if (p.isStart) return;
+		const n = start ? i : i + 1;
+		routeLayer.addLayer(L.marker(coordLL(p.x, p.y), {
+			icon: L.divIcon({ className: "", html: `<div class="route-num">${n}</div>`, iconSize: [20, 20], iconAnchor: [10, 10] }),
+			interactive: false,
+		}));
+	});
+	info.textContent = `${pts.length} stops · ~${Math.round(total)} map-units${start ? " · from you" : ""}`;
+}
+document.getElementById("routePlan").onclick = planRoute;
+document.getElementById("routeClear").onclick = () => { routeLayer.clearLayers(); document.getElementById("routeInfo").textContent = ""; };
+
 // --- Teamcraft list import ------------------------------------------------------
 let listData = null;
 const listLayer = L.layerGroup().addTo(map);
@@ -543,6 +635,8 @@ function viewMap(m) {
 	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
 	if (huntData) renderHunt(); // refresh 📍 here-markers for the new map
 	if (listData) { renderList(); highlightListNodes(); }
+	routeLayer.clearLayers();
+	document.getElementById("routeInfo").textContent = "";
 	loadCustom(m).catch((e) => console.error("loadCustom failed:", e));
 	refreshMarker();
 }
