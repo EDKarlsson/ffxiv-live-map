@@ -35,6 +35,10 @@ export function toPixel(raw, offset, sizeFactor) {
  * Find the map entry for a territory id (InitZone.zoneId).
  * Several maps can share a territory (e.g. multi-floor); prefer index 0.
  */
+export function mapById(id) {
+	return maps[id] ?? null;
+}
+
 export function mapForTerritory(territoryId) {
 	const candidates = Object.values(maps).filter((m) => m.territory_id === territoryId);
 	if (candidates.length === 0) return null;

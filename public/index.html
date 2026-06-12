@@ -11,11 +11,17 @@
 	#map { height: 100%; background: #15171c; }
 	#hud {
 		position: absolute; top: 10px; right: 10px; z-index: 1000;
-		background: rgba(20, 22, 28, 0.85); border: 1px solid #333; border-radius: 8px;
-		padding: 10px 14px; font-size: 13px; line-height: 1.5; min-width: 180px;
+		background: rgba(20, 22, 28, 0.9); border: 1px solid #333; border-radius: 8px;
+		padding: 10px 14px; font-size: 13px; line-height: 1.5; width: 250px;
+		max-height: calc(100vh - 40px); overflow-y: auto;
 	}
 	#hud .zone { font-weight: 600; }
 	#hud .muted { color: #9aa0aa; }
+	#hud select { width: 100%; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px; margin: 4px 0; }
+	#hud input[type="text"] { width: 100%; box-sizing: border-box; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px 6px; margin: 4px 0; }
+	#hud label { cursor: pointer; }
+	#hud details { margin-top: 6px; border-top: 1px solid #333; padding-top: 6px; }
+	#hud summary { cursor: pointer; font-weight: 600; }
 	#status { position: absolute; bottom: 10px; left: 10px; z-index: 1000; font-size: 12px;
 		padding: 4px 10px; border-radius: 6px; background: rgba(20,22,28,.85); border: 1px solid #333; }
 	#status.ok { color: #7fd17f; } #status.bad { color: #e07a7a; }
@@ -25,11 +31,19 @@
 	}
 	.node-icon img { width: 26px; height: 26px; filter: drop-shadow(0 0 3px rgba(0,0,0,.8)); }
 	.node-up img { filter: drop-shadow(0 0 6px #ffd470); }
-	#timedPanel { margin-top: 6px; border-top: 1px solid #333; padding-top: 6px; max-height: 40vh; overflow-y: auto; }
-	#timedPanel .trow { cursor: pointer; padding: 1px 0; white-space: nowrap; }
-	#timedPanel .trow:hover { color: #fff; }
+	.mob-dot {
+		min-width: 14px; height: 14px; border-radius: 8px; padding: 0 3px; box-sizing: border-box;
+		background: #c0392b; border: 1px solid #f0b1a8; color: #fff;
+		font: 700 10px/12px system-ui; text-align: center;
+	}
+	.mob-dot.fate { background: #8e44ad; }
+	#timedPanel { max-height: 30vh; overflow-y: auto; }
+	#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
 	#timedPanel .up { color: #8fd98f; }
 	#timedPanel .down { color: #9aa0aa; }
+	#mobList { max-height: 35vh; overflow-y: auto; }
+	#mobList .lvl { color: #9aa0aa; font-size: 11px; }
 	.leaflet-popup-content-wrapper, .leaflet-popup-tip {
 		background: #1d2026; color: #e6e6e6; border: 1px solid #333;
 	}
@@ -43,11 +57,16 @@
 <div id="map"></div>
 <div id="hud">
 	<div class="zone" id="zoneName">No zone yet</div>
-	<div class="muted">Change zones or move to sync</div>
+	<select id="mapPicker"></select>
+	<label><input type="checkbox" id="followToggle" checked> Follow player</label>
 	<div id="coords">X: –  Y: –</div>
 	<div id="nodeCount" class="muted"></div>
 	<div id="etClock" class="muted">ET --:--</div>
-	<div id="timedPanel"></div>
+	<details open><summary>Timed nodes</summary><div id="timedPanel"></div></details>
+	<details><summary>Monsters</summary>
+		<input type="text" id="mobSearch" placeholder="filter mobs…">
+		<div id="mobList" class="muted">no data for this map</div>
+	</details>
 </div>
 <div id="status" class="bad">connecting…</div>
 
@@ -61,14 +80,23 @@ map.fitBounds(bounds);
 
 let overlay = null;
 let marker = null;
-let currentMap = null;
+let viewedMap = null;  // map entry currently displayed
+let playerMap = null;  // map entry the player is actually in
+let lastPos = null;
+let follow = true;
 
 // Leaflet Simple CRS: latlng = [y-up, x]; image pixel y grows downward.
 const px2ll = (x, y) => [IMG - y, x];
 
-// --- Gathering node layers ---------------------------------------------------
+// In-game map coord -> image pixel (inverse of the daemon formula)
+function coordToPx(coord, sizeFactor) {
+	const c = sizeFactor / 100;
+	return ((coord - 1) * 2048 * c) / 41;
+}
+const coordLL = (x, y) => px2ll(coordToPx(x, viewedMap.size_factor), coordToPx(y, viewedMap.size_factor));
+
+// --- Gathering node layers ----------------------------------------------------
 // Node type enum + icons: Teamcraft nodeTypeName/nodeTypeIcon pipes.
-// 0 Mineral / 1 Rocky = Miner; 2 Tree / 3 Vegetation = Botanist; 4/5 Fishing.
 const TYPE_NAMES = ["Mineral (MIN)", "Rocky (MIN)", "Tree (BTN)", "Vegetation (BTN)", "Fishing", "Spearfishing"];
 const ICONS = ["060438", "060437", "060433", "060432", "060445", "060465"];
 const TIMED_ICONS = ["060464", "060463", "060462", "060461", "060445", "060466"];
@@ -77,28 +105,21 @@ const iconUrl = (n) => `https://xivapi.com/i/060000/${(n.limited || n.spawns.len
 const layers = {
 	min: L.layerGroup().addTo(map),
 	btn: L.layerGroup().addTo(map),
-	fsh: L.layerGroup(), // off by default
+	fsh: L.layerGroup(),
 };
 L.control.layers(null, {
 	"Miner nodes": layers.min,
 	"Botanist nodes": layers.btn,
 	"Fishing spots": layers.fsh,
-}, { collapsed: false }).addTo(map);
-
-// In-game map coord -> image pixel (inverse of daemon formula; offsets are in mapCoord already)
-function coordToPx(coord, sizeFactor) {
-	const c = sizeFactor / 100;
-	return ((coord - 1) * 2048 * c) / 41;
-}
+}, { collapsed: true }).addTo(map);
 
 // --- Eorzea Time (math per ffxiv-node-timer: 1 ET hour = 175 real seconds) ----
 const ET_MULT = 3600 / 175;
 const etHoursNow = () => (Date.now() / 1000) * ET_MULT / 3600 % 24;
 
-// Status of a timed node: { up, secsLeft } (real seconds to despawn or next spawn)
 function nodeStatus(n) {
 	const cur = etHoursNow();
-	const durH = n.duration / 60; // duration is in ET minutes
+	const durH = n.duration / 60; // ET minutes
 	let best = null;
 	for (const h of n.spawns) {
 		const sinceOpen = (cur - h + 24) % 24;
@@ -124,10 +145,10 @@ function tick() {
 		if (el) el.classList.toggle("node-up", st.up);
 		return { n, ll, st };
 	}).sort((a, b) => (a.st.up === b.st.up) ? a.st.secsLeft - b.st.secsLeft : (a.st.up ? -1 : 1));
-	document.getElementById("timedPanel").innerHTML = rows.map(({ n, ll, st }, i) =>
+	document.getElementById("timedPanel").innerHTML = rows.map(({ n, st }, i) =>
 		`<div class="trow ${st.up ? "up" : "down"}" data-i="${i}">` +
 		`${st.up ? "● UP" : "○"} Lv${n.level} ${n.items[0]?.name ?? "?"} — ${st.up ? `${fmtMins(st.secsLeft)} left` : `in ${fmtMins(st.secsLeft)}`}</div>`
-	).join("");
+	).join("") || `<span class="muted">none on this map</span>`;
 	[...document.querySelectorAll("#timedPanel .trow")].forEach((el) => {
 		el.onclick = () => {
 			const { ll, n } = rows[Number(el.dataset.i)];
@@ -156,15 +177,13 @@ async function loadNodes(m) {
 	timedMarkers = [];
 	const nodes = await fetch(`/nodes?map=${m.id}`).then((r) => r.json());
 	for (const n of nodes) {
-		const ll = px2ll(coordToPx(n.x, m.size_factor), coordToPx(n.y, m.size_factor));
+		const ll = coordLL(n.x, n.y);
 		const mk = L.marker(ll, {
 			icon: L.divIcon({ className: "node-icon", html: `<img src="${iconUrl(n)}">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
-		}).bindPopup(() => nodePopup(n)); // function -> countdown fresh at open
+		}).bindPopup(() => nodePopup(n));
 		if (n.spawns.length) timedMarkers.push({ n, mk, ll });
 		const group = n.type <= 1 ? layers.min : n.type <= 3 ? layers.btn : layers.fsh;
 		group.addLayer(mk);
-		// Spawn-scatter area: node.radius is in world units (yalms);
-		// pixels-per-yalm = size_factor/100 (same c as the coord formula).
 		if (n.radius > 0) {
 			group.addLayer(L.circle(ll, {
 				radius: n.radius * (m.size_factor / 100),
@@ -177,28 +196,139 @@ async function loadNodes(m) {
 	document.getElementById("nodeCount").textContent = `${nodes.length} gathering nodes`;
 }
 
-function setZone(m) {
+// --- Monsters (A Realm Remapped-style per-mob toggles) -------------------------
+let mobData = [];                 // /monsters payload for viewed map
+const mobLayers = new Map();      // mobId -> layerGroup
+const mobChecked = new Set();     // persists across maps for same-named? no: per map ids; reset on map change
+
+function clusterPoints(points, grid = 0.6) {
+	const cells = new Map();
+	for (const [x, y, fate] of points) {
+		const key = `${Math.round(x / grid)}:${Math.round(y / grid)}`;
+		const c = cells.get(key) ?? { x: 0, y: 0, n: 0, fate: 0 };
+		c.x += x; c.y += y; c.n++; c.fate += fate;
+		cells.set(key, c);
+	}
+	return [...cells.values()].map((c) => ({ x: c.x / c.n, y: c.y / c.n, n: c.n, fate: c.fate > 0 }));
+}
+
+function showMob(mob) {
+	if (mobLayers.has(mob.id)) return;
+	const g = L.layerGroup().addTo(map);
+	for (const cl of clusterPoints(mob.points)) {
+		g.addLayer(L.marker(coordLL(cl.x, cl.y), {
+			icon: L.divIcon({
+				className: "",
+				html: `<div class="mob-dot${cl.fate ? " fate" : ""}">${cl.n > 1 ? cl.n : ""}</div>`,
+				iconSize: [14, 14], iconAnchor: [7, 7],
+			}),
+		}).bindTooltip(`${mob.name} (Lv${mob.lmin}${mob.lmax !== mob.lmin ? "–" + mob.lmax : ""})`)
+			.bindPopup(
+				`<b>${mob.name}</b> <span class="nlvl">Lv${mob.lmin}${mob.lmax !== mob.lmin ? "–" + mob.lmax : ""} · ${mob.points.length} spawn points${cl.fate ? " · FATE" : ""}</span><br>` +
+				`<a href="https://ffxivteamcraft.com/db/en/mob/${mob.id}" target="_blank">Teamcraft DB</a>`
+			));
+	}
+	mobLayers.set(mob.id, g);
+}
+
+function hideMob(id) {
+	mobLayers.get(id)?.remove();
+	mobLayers.delete(id);
+}
+
+function renderMobList() {
+	const q = document.getElementById("mobSearch").value.trim().toLowerCase();
+	const list = document.getElementById("mobList");
+	const rows = mobData.filter((m) => !q || m.name.toLowerCase().includes(q));
+	list.innerHTML = rows.length
+		? rows.map((m) =>
+			`<div class="mrow"><label><input type="checkbox" data-id="${m.id}" ${mobChecked.has(m.id) ? "checked" : ""}> ` +
+			`${m.name} <span class="lvl">Lv${m.lmin}${m.lmax !== m.lmin ? "–" + m.lmax : ""} ·${m.points.length}</span></label></div>`).join("")
+		: `<span class="muted">${mobData.length ? "no match" : "no data for this map"}</span>`;
+	[...list.querySelectorAll("input[type=checkbox]")].forEach((cb) => {
+		cb.onchange = () => {
+			const id = Number(cb.dataset.id);
+			const mob = mobData.find((m) => m.id === id);
+			if (cb.checked) { mobChecked.add(id); showMob(mob); }
+			else { mobChecked.delete(id); hideMob(id); }
+		};
+	});
+}
+document.getElementById("mobSearch").oninput = renderMobList;
+
+async function loadMonsters(m) {
+	mobLayers.forEach((g) => g.remove());
+	mobLayers.clear();
+	mobChecked.clear();
+	mobData = await fetch(`/monsters?map=${m.id}`).then((r) => r.json());
+	renderMobList();
+}
+
+// --- Map browser ---------------------------------------------------------------
+async function buildPicker() {
+	const idx = await fetch("/maps").then((r) => r.json());
+	const groups = {};
+	for (const m of idx) (groups[m.region] ??= []).push(m);
+	const sel = document.getElementById("mapPicker");
+	sel.innerHTML = `<option value="">— select a map —</option>` + Object.keys(groups).sort().map((region) =>
+		`<optgroup label="${region}">` + groups[region]
+			.sort((a, b) => a.name.localeCompare(b.name) || a.index - b.index)
+			.map((m) => `<option value="${m.id}">${m.name}${m.sub ? " — " + m.sub : ""}${m.index ? ` (${m.index})` : ""}</option>`).join("") +
+		`</optgroup>`).join("");
+	sel.onchange = async () => {
+		if (!sel.value) return;
+		setFollow(false);
+		viewMap(await fetch(`/map?id=${sel.value}`).then((r) => r.json()));
+	};
+}
+buildPicker();
+
+function setFollow(v) {
+	follow = v;
+	document.getElementById("followToggle").checked = v;
+	if (v && playerMap && viewedMap?.id !== playerMap.id) viewMap(playerMap);
+}
+document.getElementById("followToggle").onchange = (e) => setFollow(e.target.checked);
+
+function viewMap(m) {
+	if (!m || viewedMap?.id === m.id) { refreshMarker(); return; }
+	viewedMap = m;
 	if (overlay) { overlay.remove(); overlay = null; }
-	if (marker) { marker.remove(); marker = null; }
-	currentMap = m;
-	if (!m) { document.getElementById("zoneName").textContent = "Unknown zone"; return; }
 	overlay = L.imageOverlay(m.image, bounds).addTo(map);
 	map.fitBounds(bounds);
 	document.getElementById("zoneName").textContent = `Map #${m.id} (territory ${m.territory_id})`;
+	document.getElementById("mapPicker").value = String(m.id);
 	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
+	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
+	refreshMarker();
 }
 
-function setPos(p) {
-	const ll = px2ll(p.pixelX, p.pixelY);
+// --- Player position ------------------------------------------------------------
+function refreshMarker() {
+	const onViewed = lastPos && playerMap && viewedMap && playerMap.id === viewedMap.id;
+	if (!onViewed) { marker?.remove(); marker = null; return; }
+	const ll = px2ll(lastPos.pixelX, lastPos.pixelY);
 	if (!marker) {
 		marker = L.marker(ll, { icon: L.divIcon({ className: "player-dot", iconSize: [14, 14] }) }).addTo(map);
 	} else {
 		marker.setLatLng(ll);
 	}
-	document.getElementById("coords").textContent =
-		`X: ${p.mapX.toFixed(1)}  Y: ${p.mapY.toFixed(1)}`;
 }
 
+function setPos(p) {
+	lastPos = p;
+	refreshMarker();
+	document.getElementById("coords").textContent = `X: ${p.mapX.toFixed(1)}  Y: ${p.mapY.toFixed(1)}`;
+}
+
+function handleZone(m) {
+	playerMap = m;
+	lastPos = null;
+	if (follow && m) viewMap(m);
+	else refreshMarker();
+}
+
+// --- WebSocket -------------------------------------------------------------------
 function connect() {
 	const ws = new WebSocket(`ws://${location.host}`);
 	const status = document.getElementById("status");
@@ -210,10 +340,10 @@ function connect() {
 	ws.onmessage = (ev) => {
 		const msg = JSON.parse(ev.data);
 		if (msg.type === "state") {
-			if (msg.state.map) setZone(msg.state.map);
+			if (msg.state.map) handleZone(msg.state.map);
 			if (msg.state.pos) setPos(msg.state.pos);
 		} else if (msg.type === "zone") {
-			setZone(msg.map);
+			handleZone(msg.map);
 		} else if (msg.type === "pos") {
 			setPos(msg.pos);
 		}

@@ -19,7 +19,7 @@ import { dirname, join, extname } from "path";
 import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import pcap from "@ffxiv-teamcraft/pcap-ffxiv";
-import { mapForTerritory, convertPosition } from "./coords.mjs";
+import { mapForTerritory, mapById, convertPosition } from "./coords.mjs";
 import { readFileSync, writeFileSync, existsSync } from "fs";
 
 const { CaptureInterface } = pcap;
@@ -28,6 +28,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // Gathering nodes (built by scripts/build-node-data.mjs from Teamcraft data)
 const nodeDb = JSON.parse(readFileSync(join(__dirname, "../data/nodes.json"), "utf-8"));
 const itemNames = JSON.parse(readFileSync(join(__dirname, "../data/item-names.json"), "utf-8"));
+const monsterDb = JSON.parse(readFileSync(join(__dirname, "../data/monsters.json"), "utf-8"));
+const mobNames = JSON.parse(readFileSync(join(__dirname, "../data/mob-names.json"), "utf-8"));
+const mapsIndex = JSON.parse(readFileSync(join(__dirname, "../data/maps-index.json"), "utf-8"));
 
 // --- CLI args ---------------------------------------------------------------
 const args = process.argv.slice(2);
@@ -96,6 +99,31 @@ const server = createServer(async (req, res) => {
 			}));
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/monsters")) {
+		const mapId = String(Number(new URL(req.url, "http://localhost").searchParams.get("map")));
+		const mobs = monsterDb[mapId] ?? {};
+		const list = Object.entries(mobs).map(([id, m]) => ({
+			id: Number(id),
+			name: mobNames[id] ?? `#${id}`,
+			lmin: m.lmin,
+			lmax: m.lmax,
+			points: m.points,
+		})).sort((a, b) => a.lmin - b.lmin || a.name.localeCompare(b.name));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url === "/maps") {
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(mapsIndex));
+		return;
+	}
+	if (req.url.startsWith("/map?")) {
+		const id = Number(new URL(req.url, "http://localhost").searchParams.get("id"));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(mapById(id)));
 		return;
 	}
 	if (req.url === "/state") {
