@@ -33,6 +33,8 @@ const mobNames = JSON.parse(readFileSync(join(__dirname, "../data/mob-names.json
 const mapsIndex = JSON.parse(readFileSync(join(__dirname, "../data/maps-index.json"), "utf-8"));
 const fateDb = JSON.parse(readFileSync(join(__dirname, "../data/fates.json"), "utf-8"));
 const npcDb = JSON.parse(readFileSync(join(__dirname, "../data/npcs.json"), "utf-8"));
+const huntingLog = JSON.parse(readFileSync(join(__dirname, "../data/hunting-log.json"), "utf-8"));
+const mobMaps = JSON.parse(readFileSync(join(__dirname, "../data/mob-maps.json"), "utf-8"));
 
 // --- CLI args ---------------------------------------------------------------
 const args = process.argv.slice(2);
@@ -123,6 +125,19 @@ const server = createServer(async (req, res) => {
 		const list = db[String(Number(u.searchParams.get("map")))] ?? [];
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url === "/hunting-log") {
+		// Attach which maps each target mob appears on (for jump-to).
+		const out = {};
+		for (const [cls, entries] of Object.entries(huntingLog)) {
+			out[cls] = entries.map((e) => ({
+				...e,
+				targets: e.targets.map((t) => ({ ...t, maps: mobMaps[t.mobId] ?? [] })),
+			}));
+		}
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(out));
 		return;
 	}
 	if (req.url === "/maps") {

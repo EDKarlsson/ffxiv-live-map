@@ -81,9 +81,16 @@ for (const [mobId, m] of Object.entries(monsters)) {
 const mobNamesOut = {};
 for (const id of usedMobs) mobNamesOut[id] = mobNames[id].en;
 
+// Reverse index: mobId -> [mapId, ...] so the hunting-log UI can jump to a target.
+const mobMaps = {};
+for (const [mapId, mobs] of Object.entries(byMap)) {
+	for (const mobId of Object.keys(mobs)) (mobMaps[mobId] ??= []).push(Number(mapId));
+}
+
 writeFileSync(join(__dirname, "../data/monsters.json"), JSON.stringify(byMap));
 writeFileSync(join(__dirname, "../data/mob-names.json"), JSON.stringify(mobNamesOut));
-console.log(`monster maps: ${Object.keys(byMap).length}, named mobs: ${usedMobs.size}`);
+writeFileSync(join(__dirname, "../data/mob-maps.json"), JSON.stringify(mobMaps));
+console.log(`monster maps: ${Object.keys(byMap).length}, named mobs: ${usedMobs.size}, mob->maps: ${Object.keys(mobMaps).length}`);
 
 // --- FATEs: fates.json entries with position {map, x, y}; icon is a tex path
 // whose 6-digit id maps to https://xivapi.com/i/060000/<id>.png -----------------

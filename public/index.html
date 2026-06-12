@@ -41,6 +41,11 @@
 		width: 12px; height: 12px; border-radius: 50%;
 		background: #2e86c1; border: 2px solid #d6eaf8;
 	}
+	#huntList { max-height: 40vh; overflow-y: auto; font-size: 12px; }
+	#huntList .rank { color: #e8c36a; font-weight: 600; margin-top: 4px; }
+	#huntList .htgt { cursor: pointer; padding: 1px 0 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	#huntList .htgt:hover { color: #fff; }
+	#huntList .hcount { color: #9aa0aa; }
 	#timedPanel { max-height: 30vh; overflow-y: auto; }
 	#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
@@ -74,6 +79,10 @@
 	<details><summary>NPCs</summary>
 		<input type="text" id="npcSearch" placeholder="search NPCs…">
 		<div id="npcInfo" class="muted"></div>
+	</details>
+	<details><summary>Hunting Log</summary>
+		<select id="huntClass"></select>
+		<div id="huntList"></div>
 	</details>
 </div>
 <div id="status" class="bad">connecting…</div>
@@ -313,6 +322,54 @@ async function loadNpcs(m) {
 }
 document.getElementById("npcSearch").oninput = renderNpcs;
 
+// --- Hunting Log ----------------------------------------------------------------
+let huntData = null;
+async function buildHunt() {
+	huntData = await fetch("/hunting-log").then((r) => r.json());
+	const sel = document.getElementById("huntClass");
+	sel.innerHTML = Object.keys(huntData).map((c) => `<option${c === "Maelstrom" ? " selected" : ""}>${c}</option>`).join("");
+	sel.onchange = renderHunt;
+	renderHunt();
+}
+function renderHunt() {
+	const cls = document.getElementById("huntClass").value;
+	const entries = huntData[cls] ?? [];
+	const byRank = {};
+	for (const e of entries) (byRank[e.rank] ??= []).push(...e.targets);
+	const list = document.getElementById("huntList");
+	list.innerHTML = Object.keys(byRank).sort((a, b) => a - b).map((rank) =>
+		`<div class="rank">Rank ${rank}</div>` + byRank[rank].map((t) => {
+			const here = viewedMap && t.maps.includes(viewedMap.id);
+			return `<div class="htgt" data-mob="${t.mobId}" title="${t.zones.join(", ")}">` +
+				`<span class="hcount">${t.count}×</span> ${t.name}${here ? " 📍" : ""}</div>`;
+		}).join("")).join("");
+	[...list.querySelectorAll(".htgt")].forEach((el) => {
+		el.onclick = () => gotoMob(Number(el.dataset.mob));
+	});
+}
+async function gotoMob(mobId) {
+	let m = viewedMap;
+	if (!huntTargetMaps(mobId).includes(m?.id)) {
+		const maps = huntTargetMaps(mobId);
+		if (!maps.length) return;
+		m = await fetch(`/map?id=${maps[0]}`).then((r) => r.json());
+		setFollow(false);
+		await new Promise((res) => { viewMap(m); setTimeout(res, 400); });
+	}
+	const mob = mobData.find((x) => x.id === mobId);
+	if (mob) {
+		if (!mobChecked.has(mobId)) { mobChecked.add(mobId); showMob(mob); renderMobList(); }
+		map.flyTo(coordLL(mob.points[0][0], mob.points[0][1]), 1);
+		mobLayers.get(mobId)?.getLayers()[0]?.openPopup();
+	}
+}
+function huntTargetMaps(mobId) {
+	for (const entries of Object.values(huntData ?? {}))
+		for (const e of entries) for (const t of e.targets) if (t.mobId === mobId) return t.maps;
+	return [];
+}
+buildHunt();
+
 // --- Map browser ---------------------------------------------------------------
 async function buildPicker() {
 	const idx = await fetch("/maps").then((r) => r.json());
@@ -351,6 +408,7 @@ function viewMap(m) {
 	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
 	loadFates(m).catch((e) => console.error("loadFates failed:", e));
 	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
+	if (huntData) renderHunt(); // refresh 📍 here-markers for the new map
 	refreshMarker();
 }
 
