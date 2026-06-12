@@ -163,8 +163,24 @@ ci.on("ready", async () => {
 });
 
 ci.on("error", (err) => console.error("[pcap] error:", err));
+
+let reconnecting = false;
 ci.on("stopped", () => {
 	state.connected = false;
 	broadcast({ type: "disconnected" });
-	console.log("[pcap] capture stopped");
+	if (reconnecting) return;
+	reconnecting = true;
+	console.log("[pcap] capture stopped — reconnecting in 2s…");
+	setTimeout(async () => {
+		try {
+			await ci.start();
+			state.connected = true;
+			broadcast({ type: "connected" });
+			console.log("[pcap] reconnected.");
+		} catch (err) {
+			console.error("[pcap] reconnect failed:", err);
+		} finally {
+			reconnecting = false;
+		}
+	}, 2000);
 });

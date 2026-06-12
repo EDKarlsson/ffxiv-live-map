@@ -48,7 +48,15 @@ echo "[bridge] exe:    $BRIDGE"
 echo "[bridge] dll:    $DLL_WIN"
 echo "[bridge] port:   $PORT"
 
-exec env \
-  WINEPREFIX="$WINEPREFIX" \
-  WINEESYNC=1 WINEMSYNC=1 WINEFSYNC=0 WINEDEBUG=-all \
-  "$WINE" "$BRIDGE" --dll-path "$DLL_WIN" --port "$PORT"
+# The bridge serves a single client and EXITS when that client disconnects
+# (observed 2026-06-12: stopping the daemon took the bridge down with it).
+# Restart it in a loop so the daemon can reconnect at any time.
+while true; do
+  env \
+    WINEPREFIX="$WINEPREFIX" \
+    WINEESYNC=1 WINEMSYNC=1 WINEFSYNC=0 WINEDEBUG=-all \
+    "$WINE" "$BRIDGE" --dll-path "$DLL_WIN" --port "$PORT" || true
+  pgrep -f ffxiv_dx11.exe >/dev/null || { echo "[bridge] game closed — exiting"; exit 0; }
+  echo "[bridge] exited (client disconnected?) — restarting in 1s…"
+  sleep 1
+done
