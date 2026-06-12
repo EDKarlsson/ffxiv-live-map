@@ -71,12 +71,28 @@ WINEESYNC/WINEMSYNC/WINEFSYNC env) and finds the bridge exe / deucalion.dll
 inside the Teamcraft app bundle. Re-injection is harmless: the DLL is already
 loaded, the bridge just attaches a new pipe subscriber.
 
-## Roadmap
+## Layers & features
 
-- [ ] v1: live player dot on correct zone map ← **you are here**
-- [ ] Verify coordinate formula against in-game map (live test)
-- [ ] Marker layers: material nodes, monsters (GarlandTools links), hunting log mobs
-- [ ] Timed node spawns with Eorzea-time countdowns
-- [ ] Multiple custom markers with different icons (beats the in-game 1-flag limit)
-- [ ] Teamcraft list import → mark required material locations
+- [x] Live player dot on correct zone map (verified in-game)
+- [x] Gathering nodes — MIN/BTN/fishing, dotted spawn-area circles, GarlandTools item links
+- [x] Timed/unspoiled nodes — live Eorzea-time countdowns, glow when up, sorted panel
+- [x] Monsters — per-mob toggles, clustered spawn counts, FATE-spawn coloring
+- [x] FATEs — real icons + levels
+- [x] NPCs — search-driven (23k indexed), fly-to on single match
+- [x] Hunting Log — 12 class/GC logs (XIVAPI v2 MonsterNote), click a target to jump to its spawns
+- [x] Teamcraft list import — Firestore REST read, maps each required item's gathering nodes, checklist + jump
+- [x] Custom markers — click-to-place with label, persisted server-side
+- [x] Map browser — pick any of ~1200 maps (grouped by region), Follow-player toggle
+- [x] Data served from XIVAPI v2 asset endpoints (v1 host is frozen)
 - [ ] Optimal farming route calculation
+- [ ] Aether currents / vistas / treasure spots layers
+
+## Data build
+
+Bundled JSON in `data/` is generated from the local Teamcraft checkout and
+XIVAPI v2:
+
+```sh
+node scripts/build-node-data.mjs     # nodes, monsters, fates, npcs, maps, item indexes
+node scripts/build-hunting-log.mjs   # hunting log (fetches XIVAPI v2 MonsterNote)
+```
