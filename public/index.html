@@ -205,7 +205,7 @@ L.control.layers(null, {
 	"Fishing spots": layers.fsh,
 	"Spawn areas": layers.areas,
 	"FATEs": layers.fates,
-}, { collapsed: true }).addTo(map);
+}, { collapsed: false, position: "bottomright" }).addTo(map);
 
 // --- Eorzea Time (math per ffxiv-node-timer: 1 ET hour = 175 real seconds) ----
 const ET_MULT = 3600 / 175;
@@ -676,8 +676,10 @@ map.on("click", async (e) => {
 });
 
 // --- Map browser ---------------------------------------------------------------
+let mapNameById = {};
 async function buildPicker() {
 	const idx = await fetch("/maps").then((r) => r.json());
+	for (const m of idx) mapNameById[m.id] = m.name + (m.sub ? ` — ${m.sub}` : "") + (m.index ? ` (${m.index})` : "");
 	const groups = {};
 	for (const m of idx) (groups[m.region] ??= []).push(m);
 	const sel = document.getElementById("mapPicker");
@@ -691,6 +693,14 @@ async function buildPicker() {
 		setFollow(false);
 		viewMap(await fetch(`/map?id=${sel.value}`).then((r) => r.json()));
 	};
+	if (viewedMap) applyPickerSelection(viewedMap); // options loaded after first zone restore
+}
+// Reflect the viewed map in the picker + zone label (works once options exist).
+function applyPickerSelection(m) {
+	const name = mapNameById[m.id];
+	document.getElementById("zoneName").textContent = name || `Map #${m.id} (territory ${m.territory_id})`;
+	const sel = document.getElementById("mapPicker");
+	if (name) sel.value = String(m.id);
 }
 buildPicker();
 
@@ -707,8 +717,7 @@ function viewMap(m) {
 	if (overlay) { overlay.remove(); overlay = null; }
 	overlay = L.imageOverlay(m.image, bounds, { pane: "basemap" }).addTo(map);
 	map.fitBounds(bounds);
-	document.getElementById("zoneName").textContent = `Map #${m.id} (territory ${m.territory_id})`;
-	document.getElementById("mapPicker").value = String(m.id);
+	applyPickerSelection(m);
 	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
 	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
 	loadFates(m).catch((e) => console.error("loadFates failed:", e));
