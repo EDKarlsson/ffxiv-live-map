@@ -20,7 +20,7 @@ import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import pcap from "@ffxiv-teamcraft/pcap-ffxiv";
 import { mapForTerritory, convertPosition } from "./coords.mjs";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 
 const { CaptureInterface } = pcap;
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,6 +46,34 @@ const state = {
 	rotation: null,
 	connected: false,
 };
+
+// Persist last zone/position so a daemon restart doesn't need a zone change
+// to show the map again. Stale-zone caveat: if you switch zones while the
+// daemon is down, this restores the old zone until the next initZone.
+const STATE_FILE = join(__dirname, "../.state.json");
+try {
+	if (existsSync(STATE_FILE)) {
+		const saved = JSON.parse(readFileSync(STATE_FILE, "utf-8"));
+		state.map = saved.map ?? null;
+		state.pos = saved.pos ?? null;
+		state.rotation = saved.rotation ?? null;
+		if (state.map) console.log(`[map] restored last state: map ${state.map.id}`);
+	}
+} catch (e) {
+	console.warn("[map] could not restore saved state:", e.message);
+}
+
+let lastSave = 0;
+function persistState(force = false) {
+	const now = Date.now();
+	if (!force && now - lastSave < 5000) return;
+	lastSave = now;
+	try {
+		writeFileSync(STATE_FILE, JSON.stringify({ map: state.map, pos: state.pos, rotation: state.rotation }));
+	} catch (e) {
+		console.warn("[map] state save failed:", e.message);
+	}
+}
 
 // --- HTTP + WebSocket server --------------------------------------------------
 const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
@@ -121,6 +149,7 @@ function handlePosition(pos, rotation) {
 	state.pos = convertPosition(pos, state.map);
 	state.rotation = rotation ?? state.rotation;
 	broadcast({ type: "pos", pos: state.pos, rotation: state.rotation });
+	persistState();
 	if (VERBOSE) {
 		console.log(
 			`[pos] raw(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}) -> map(${state.pos.mapX.toFixed(1)}, ${state.pos.mapY.toFixed(1)})`
@@ -138,6 +167,7 @@ ci.on("message", (m) => {
 			state.map = map;
 			state.pos = null;
 			broadcast({ type: "zone", map });
+			persistState(true);
 			if (map && d.pos) handlePosition(d.pos);
 			break;
 		}
