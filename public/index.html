@@ -23,6 +23,14 @@
 		width: 14px; height: 14px; border-radius: 50%;
 		background: #4da3ff; border: 2px solid #fff; box-shadow: 0 0 8px #4da3ff;
 	}
+	.node-icon img { width: 26px; height: 26px; filter: drop-shadow(0 0 3px rgba(0,0,0,.8)); }
+	.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+		background: #1d2026; color: #e6e6e6; border: 1px solid #333;
+	}
+	.leaflet-popup-content a { color: #6db3ff; text-decoration: none; }
+	.leaflet-popup-content .nlvl { color: #9aa0aa; font-size: 11px; }
+	.leaflet-popup-content .timed { color: #e8c36a; font-size: 11px; }
+	.leaflet-container { background: #15171c; }
 </style>
 </head>
 <body>
@@ -31,6 +39,7 @@
 	<div class="zone" id="zoneName">No zone yet</div>
 	<div class="muted">Change zones or move to sync</div>
 	<div id="coords">X: –  Y: –</div>
+	<div id="nodeCount" class="muted"></div>
 </div>
 <div id="status" class="bad">connecting…</div>
 
@@ -44,17 +53,69 @@ map.fitBounds(bounds);
 
 let overlay = null;
 let marker = null;
+let currentMap = null;
 
 // Leaflet Simple CRS: latlng = [y-up, x]; image pixel y grows downward.
 const px2ll = (x, y) => [IMG - y, x];
 
+// --- Gathering node layers ---------------------------------------------------
+// Node type enum + icons: Teamcraft nodeTypeName/nodeTypeIcon pipes.
+// 0 Mineral / 1 Rocky = Miner; 2 Tree / 3 Vegetation = Botanist; 4/5 Fishing.
+const TYPE_NAMES = ["Mineral (MIN)", "Rocky (MIN)", "Tree (BTN)", "Vegetation (BTN)", "Fishing", "Spearfishing"];
+const ICONS = ["060438", "060437", "060433", "060432", "060445", "060465"];
+const TIMED_ICONS = ["060464", "060463", "060462", "060461", "060445", "060466"];
+const iconUrl = (n) => `https://xivapi.com/i/060000/${(n.limited || n.spawns.length ? TIMED_ICONS : ICONS)[n.type]}.png`;
+
+const layers = {
+	min: L.layerGroup().addTo(map),
+	btn: L.layerGroup().addTo(map),
+	fsh: L.layerGroup(), // off by default
+};
+L.control.layers(null, {
+	"Miner nodes": layers.min,
+	"Botanist nodes": layers.btn,
+	"Fishing spots": layers.fsh,
+}, { collapsed: false }).addTo(map);
+
+// In-game map coord -> image pixel (inverse of daemon formula; offsets are in mapCoord already)
+function coordToPx(coord, sizeFactor) {
+	const c = sizeFactor / 100;
+	return ((coord - 1) * 2048 * c) / 41;
+}
+
+function nodePopup(n) {
+	const gt = (i) => `<a href="https://www.garlandtools.org/db/#item/${i.id}" target="_blank">${i.name}</a>`;
+	const items = n.items.map(gt).join(", ");
+	const hidden = n.hiddenItems.length ? `<br><span class="nlvl">Hidden: ${n.hiddenItems.map(gt).join(", ")}</span>` : "";
+	const timed = n.spawns.length
+		? `<br><span class="timed">Spawns ET ${n.spawns.map((h) => `${h}:00`).join(", ")} for ${n.duration / 60}h${n.ephemeral ? " (ephemeral)" : ""}${n.legendary ? " (legendary)" : ""}</span>`
+		: "";
+	return `<b>${TYPE_NAMES[n.type]}</b> <span class="nlvl">Lv${n.level} · (${n.x}, ${n.y})</span><br>${items}${hidden}${timed}`;
+}
+
+async function loadNodes(m) {
+	Object.values(layers).forEach((l) => l.clearLayers());
+	const nodes = await fetch(`/nodes?map=${m.id}`).then((r) => r.json());
+	for (const n of nodes) {
+		const ll = px2ll(coordToPx(n.x, m.size_factor), coordToPx(n.y, m.size_factor));
+		const mk = L.marker(ll, {
+			icon: L.divIcon({ className: "node-icon", html: `<img src="${iconUrl(n)}">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+		}).bindPopup(nodePopup(n));
+		const group = n.type <= 1 ? layers.min : n.type <= 3 ? layers.btn : layers.fsh;
+		group.addLayer(mk);
+	}
+	document.getElementById("nodeCount").textContent = `${nodes.length} gathering nodes`;
+}
+
 function setZone(m) {
 	if (overlay) { overlay.remove(); overlay = null; }
 	if (marker) { marker.remove(); marker = null; }
+	currentMap = m;
 	if (!m) { document.getElementById("zoneName").textContent = "Unknown zone"; return; }
 	overlay = L.imageOverlay(m.image, bounds).addTo(map);
 	map.fitBounds(bounds);
 	document.getElementById("zoneName").textContent = `Map #${m.id} (territory ${m.territory_id})`;
+	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
 }
 
 function setPos(p) {

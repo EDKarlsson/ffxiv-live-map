@@ -20,9 +20,14 @@ import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import pcap from "@ffxiv-teamcraft/pcap-ffxiv";
 import { mapForTerritory, convertPosition } from "./coords.mjs";
+import { readFileSync } from "fs";
 
 const { CaptureInterface } = pcap;
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+// Gathering nodes (built by scripts/build-node-data.mjs from Teamcraft data)
+const nodeDb = JSON.parse(readFileSync(join(__dirname, "../data/nodes.json"), "utf-8"));
+const itemNames = JSON.parse(readFileSync(join(__dirname, "../data/item-names.json"), "utf-8"));
 
 // --- CLI args ---------------------------------------------------------------
 const args = process.argv.slice(2);
@@ -49,6 +54,20 @@ const server = createServer(async (req, res) => {
 	if (req.url === "/favicon.ico") {
 		res.writeHead(204);
 		res.end();
+		return;
+	}
+	if (req.url.startsWith("/nodes")) {
+		const mapId = Number(new URL(req.url, "http://localhost").searchParams.get("map"));
+		const list = Object.entries(nodeDb)
+			.filter(([, n]) => n.map === mapId)
+			.map(([id, n]) => ({
+				id: Number(id),
+				...n,
+				items: n.items.map((i) => ({ id: i, name: itemNames[i] ?? `#${i}` })),
+				hiddenItems: n.hiddenItems.map((i) => ({ id: i, name: itemNames[i] ?? `#${i}` })),
+			}));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
 		return;
 	}
 	if (req.url === "/state") {
