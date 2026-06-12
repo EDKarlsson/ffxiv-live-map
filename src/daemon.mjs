@@ -123,8 +123,12 @@ ci.on("message", (m) => {
 			break;
 		}
 		case "playerSpawn":
-			// Initial position after spawn-in (server-sourced).
-			if (m.origin === "S" && d.pos) handlePosition(d.pos, d.rotation);
+			// Server sends playerSpawn for EVERY nearby player. Ours is the one
+			// where sourceActor === targetActor (same filter Teamcraft uses in
+			// ipc.service.ts worldId$). Without this the dot jumps to strangers.
+			if (m.origin === "S" && d.pos && m.header.sourceActor === m.header.targetActor) {
+				handlePosition(d.pos, d.rotation);
+			}
 			break;
 		case "updatePositionHandler":
 		case "updatePositionInstance":

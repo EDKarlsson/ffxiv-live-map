@@ -42,11 +42,15 @@ export function mapForTerritory(territoryId) {
 }
 
 export function convertPosition(pos, map) {
+	// Packet axis convention: pos.x = east-west, pos.y = ALTITUDE, pos.z = north-south.
+	// Map-Y must come from pos.z — same swap Teamcraft does in
+	// apps/client/.../mappy/mappy-reporter.ts (y: position.pos.z, z: position.pos.y).
 	return {
 		raw: pos,
+		altitude: pos.y,
 		mapX: toMapCoord(pos.x, map.offset_x, map.size_factor),
-		mapY: toMapCoord(pos.y, map.offset_y, map.size_factor),
+		mapY: toMapCoord(pos.z, map.offset_y, map.size_factor),
 		pixelX: toPixel(pos.x, map.offset_x, map.size_factor),
-		pixelY: toPixel(pos.y, map.offset_y, map.size_factor),
+		pixelY: toPixel(pos.z, map.offset_y, map.size_factor),
 	};
 }
