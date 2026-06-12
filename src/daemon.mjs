@@ -36,6 +36,24 @@ const npcDb = JSON.parse(readFileSync(join(__dirname, "../data/npcs.json"), "utf
 const huntingLog = JSON.parse(readFileSync(join(__dirname, "../data/hunting-log.json"), "utf-8"));
 const mobMaps = JSON.parse(readFileSync(join(__dirname, "../data/mob-maps.json"), "utf-8"));
 
+// User-placed custom markers, persisted to disk: { mapId: [ {id, x, y, label, color} ] }
+const MARKERS_FILE = join(__dirname, "../custom-markers.json");
+let customMarkers = {};
+try {
+	if (existsSync(MARKERS_FILE)) customMarkers = JSON.parse(readFileSync(MARKERS_FILE, "utf-8"));
+} catch (e) {
+	console.warn("[markers] could not load:", e.message);
+}
+const saveMarkers = () => writeFileSync(MARKERS_FILE, JSON.stringify(customMarkers));
+
+function readBody(req) {
+	return new Promise((resolve) => {
+		let b = "";
+		req.on("data", (c) => (b += c));
+		req.on("end", () => { try { resolve(JSON.parse(b || "{}")); } catch { resolve({}); } });
+	});
+}
+
 // --- CLI args ---------------------------------------------------------------
 const args = process.argv.slice(2);
 const argVal = (name, def) => {
@@ -126,6 +144,34 @@ const server = createServer(async (req, res) => {
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
 		return;
+	}
+	if (req.url.startsWith("/custom")) {
+		const u = new URL(req.url, "http://localhost");
+		if (req.method === "GET") {
+			const mapId = String(Number(u.searchParams.get("map")));
+			res.writeHead(200, { "Content-Type": "application/json" });
+			res.end(JSON.stringify(customMarkers[mapId] ?? []));
+			return;
+		}
+		if (req.method === "POST") {
+			const m = await readBody(req); // {map, x, y, label, color}
+			const mapId = String(Number(m.map));
+			const marker = { id: Date.now() + Math.floor(Math.random() * 1000), x: m.x, y: m.y, label: m.label || "", color: m.color || "#ffd470" };
+			(customMarkers[mapId] ??= []).push(marker);
+			saveMarkers();
+			res.writeHead(200, { "Content-Type": "application/json" });
+			res.end(JSON.stringify(marker));
+			return;
+		}
+		if (req.method === "DELETE") {
+			const mapId = String(Number(u.searchParams.get("map")));
+			const id = Number(u.searchParams.get("id"));
+			if (customMarkers[mapId]) customMarkers[mapId] = customMarkers[mapId].filter((x) => x.id !== id);
+			saveMarkers();
+			res.writeHead(204);
+			res.end();
+			return;
+		}
 	}
 	if (req.url === "/hunting-log") {
 		// Attach which maps each target mob appears on (for jump-to).

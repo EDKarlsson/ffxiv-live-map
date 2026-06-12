@@ -46,6 +46,11 @@
 	#huntList .htgt { cursor: pointer; padding: 1px 0 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#huntList .htgt:hover { color: #fff; }
 	#huntList .hcount { color: #9aa0aa; }
+	.custom-pin {
+		width: 16px; height: 16px; border-radius: 50% 50% 50% 0;
+		transform: rotate(-45deg); border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,.7);
+	}
+	.placing { cursor: crosshair; }
 	#timedPanel { max-height: 30vh; overflow-y: auto; }
 	#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
@@ -83,6 +88,10 @@
 	<details><summary>Hunting Log</summary>
 		<select id="huntClass"></select>
 		<div id="huntList"></div>
+	</details>
+	<details><summary>Custom markers</summary>
+		<label><input type="checkbox" id="placeToggle"> Click map to place</label>
+		<div class="muted" id="markerHint">Place mode off. Click a marker to delete.</div>
 	</details>
 </div>
 <div id="status" class="bad">connecting…</div>
@@ -370,6 +379,56 @@ function huntTargetMaps(mobId) {
 }
 buildHunt();
 
+// --- Custom markers -------------------------------------------------------------
+const customLayer = L.layerGroup().addTo(map);
+let placing = false;
+
+// Pixel -> in-game map coord (inverse of coordToPx) so a click stores game coords.
+function pxToCoord(px, sizeFactor) {
+	const c = sizeFactor / 100;
+	return (px * 41) / (2048 * c) + 1;
+}
+
+function addCustomMarker(cm) {
+	const mk = L.marker(coordLL(cm.x, cm.y), {
+		icon: L.divIcon({ className: "", html: `<div class="custom-pin" style="background:${cm.color}"></div>`, iconSize: [16, 16], iconAnchor: [8, 16] }),
+	}).bindPopup(`<b>${cm.label || "Marker"}</b> <span class="nlvl">(${cm.x.toFixed(1)}, ${cm.y.toFixed(1)})</span><br><a href="#" data-del="${cm.id}">delete</a>`);
+	mk.on("popupopen", (e) => {
+		e.popup.getElement().querySelector("[data-del]").onclick = async (ev) => {
+			ev.preventDefault();
+			await fetch(`/custom?map=${viewedMap.id}&id=${cm.id}`, { method: "DELETE" });
+			customLayer.removeLayer(mk);
+		};
+	});
+	customLayer.addLayer(mk);
+}
+
+async function loadCustom(m) {
+	customLayer.clearLayers();
+	const list = await fetch(`/custom?map=${m.id}`).then((r) => r.json());
+	list.forEach(addCustomMarker);
+}
+
+document.getElementById("placeToggle").onchange = (e) => {
+	placing = e.target.checked;
+	document.getElementById("map").classList.toggle("placing", placing);
+	document.getElementById("markerHint").textContent = placing
+		? "Click the map to drop a marker." : "Place mode off. Click a marker to delete.";
+};
+
+map.on("click", async (e) => {
+	if (!placing || !viewedMap) return;
+	const x = pxToCoord(e.latlng.lng, viewedMap.size_factor);
+	const y = pxToCoord(IMG - e.latlng.lat, viewedMap.size_factor);
+	const label = prompt(`Label for marker at (${x.toFixed(1)}, ${y.toFixed(1)}):`, "");
+	if (label === null) return;
+	const cm = await fetch("/custom", {
+		method: "POST", headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ map: viewedMap.id, x, y, label }),
+	}).then((r) => r.json());
+	addCustomMarker(cm);
+});
+
 // --- Map browser ---------------------------------------------------------------
 async function buildPicker() {
 	const idx = await fetch("/maps").then((r) => r.json());
@@ -409,6 +468,7 @@ function viewMap(m) {
 	loadFates(m).catch((e) => console.error("loadFates failed:", e));
 	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
 	if (huntData) renderHunt(); // refresh 📍 here-markers for the new map
+	loadCustom(m).catch((e) => console.error("loadCustom failed:", e));
 	refreshMarker();
 }
 
