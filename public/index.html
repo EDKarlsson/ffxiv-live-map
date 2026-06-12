@@ -46,11 +46,14 @@
 	#huntList .htgt { cursor: pointer; padding: 1px 0 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#huntList .htgt:hover { color: #fff; }
 	#huntList .hcount { color: #9aa0aa; }
-	.custom-pin {
-		width: 16px; height: 16px; border-radius: 50% 50% 50% 0;
-		transform: rotate(-45deg); border: 2px solid #fff; box-shadow: 0 0 4px rgba(0,0,0,.7);
-	}
+	.custom-pin { font-size: 22px; line-height: 22px; text-align: center; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
 	.placing { cursor: crosshair; }
+	#iconPalette { margin: 4px 0; }
+	#iconPalette span {
+		display: inline-block; font-size: 18px; padding: 2px 4px; cursor: pointer;
+		border: 1px solid transparent; border-radius: 4px;
+	}
+	#iconPalette span.sel { border-color: #6db3ff; background: #23262e; }
 	#hud button { background: #2e4a6e; color: #fff; border: 1px solid #4a6a92; border-radius: 4px; padding: 3px 10px; cursor: pointer; }
 	#hud button:hover { background: #3a5d88; }
 	#listItems { max-height: 35vh; overflow-y: auto; font-size: 12px; }
@@ -142,6 +145,7 @@
 	</details>
 	<details><summary>Custom markers</summary>
 		<label><input type="checkbox" id="placeToggle"> Click map to place</label>
+		<div id="iconPalette"></div>
 		<div class="muted" id="markerHint">Place mode off. Click a marker to delete.</div>
 	</details>
 </div>
@@ -613,8 +617,8 @@ function pxToCoord(px, sizeFactor) {
 
 function addCustomMarker(cm) {
 	const mk = L.marker(coordLL(cm.x, cm.y), {
-		icon: L.divIcon({ className: "", html: `<div class="custom-pin" style="background:${cm.color}"></div>`, iconSize: [16, 16], iconAnchor: [8, 16] }),
-	}).bindPopup(`<b>${cm.label || "Marker"}</b> <span class="nlvl">(${cm.x.toFixed(1)}, ${cm.y.toFixed(1)})</span><br><a href="#" data-del="${cm.id}">delete</a>`);
+		icon: L.divIcon({ className: "", html: `<div class="custom-pin">${cm.icon || "📍"}</div>`, iconSize: [24, 24], iconAnchor: [12, 22] }),
+	}).bindPopup(`<b>${cm.icon || ""} ${cm.label || "Marker"}</b> <span class="nlvl">(${cm.x.toFixed(1)}, ${cm.y.toFixed(1)})</span><br><a href="#" data-del="${cm.id}">delete</a>`);
 	mk.on("popupopen", (e) => {
 		e.popup.getElement().querySelector("[data-del]").onclick = async (ev) => {
 			ev.preventDefault();
@@ -631,6 +635,18 @@ async function loadCustom(m) {
 	list.forEach(addCustomMarker);
 }
 
+// Icon palette — emoji render everywhere with no external assets.
+const MARKER_ICONS = ["📍", "⛏️", "🌿", "🎣", "⭐", "❗", "💰", "🗺️", "⚔️", "🏠", "🚩", "🔑"];
+let selectedIcon = "📍";
+const palette = document.getElementById("iconPalette");
+palette.innerHTML = MARKER_ICONS.map((ic) => `<span data-ic="${ic}" class="${ic === selectedIcon ? "sel" : ""}">${ic}</span>`).join("");
+[...palette.children].forEach((sp) => {
+	sp.onclick = () => {
+		selectedIcon = sp.dataset.ic;
+		[...palette.children].forEach((s) => s.classList.toggle("sel", s === sp));
+	};
+});
+
 document.getElementById("placeToggle").onchange = (e) => {
 	placing = e.target.checked;
 	document.getElementById("map").classList.toggle("placing", placing);
@@ -646,7 +662,7 @@ map.on("click", async (e) => {
 	if (label === null) return;
 	const cm = await fetch("/custom", {
 		method: "POST", headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ map: viewedMap.id, x, y, label }),
+		body: JSON.stringify({ map: viewedMap.id, x, y, label, icon: selectedIcon }),
 	}).then((r) => r.json());
 	addCustomMarker(cm);
 });

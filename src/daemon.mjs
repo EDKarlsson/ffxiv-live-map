@@ -182,7 +182,7 @@ const server = createServer(async (req, res) => {
 		if (req.method === "POST") {
 			const m = await readBody(req); // {map, x, y, label, color}
 			const mapId = String(Number(m.map));
-			const marker = { id: Date.now() + Math.floor(Math.random() * 1000), x: m.x, y: m.y, label: m.label || "", color: m.color || "#ffd470" };
+			const marker = { id: Date.now() + Math.floor(Math.random() * 1000), x: m.x, y: m.y, label: m.label || "", color: m.color || "#ffd470", icon: m.icon || "📍" };
 			(customMarkers[mapId] ??= []).push(marker);
 			saveMarkers();
 			res.writeHead(200, { "Content-Type": "application/json" });
