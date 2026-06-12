@@ -89,10 +89,27 @@ loaded, the bridge just attaches a new pipe subscriber.
 
 ## Data build
 
-Bundled JSON in `data/` is generated from the local Teamcraft checkout and
-XIVAPI v2:
+Bundled JSON in `data/` is *derived* data, regenerated from upstream sources:
 
 ```sh
 node scripts/build-node-data.mjs     # nodes, monsters, fates, npcs, maps, item indexes
-node scripts/build-hunting-log.mjs   # hunting log (fetches XIVAPI v2 MonsterNote)
+node scripts/build-hunting-log.mjs   # hunting log (XIVAPI v2 MonsterNote)
 ```
+
+`build-node-data.mjs` pulls Teamcraft's source JSON straight from the
+[ffxiv-teamcraft repo](https://github.com/ffxiv-teamcraft/ffxiv-teamcraft/tree/staging/libs/data/src/lib/json)
+(staging branch) and caches it under `scripts/.tc-cache/`, so no local checkout
+is required. Flags:
+
+- `--local <dir>` — read a local `libs/data/src/lib/json` instead of GitHub
+- `--refresh` — bypass the cache and re-download
+- `--branch <ref>` — use a different branch/tag (default `staging`)
+
+### Data attribution
+
+Game/world data is sourced from [FFXIV Teamcraft](https://ffxivteamcraft.com)
+(node/monster/FATE/NPC/map data, MIT-licensed repo) and
+[XIVAPI v2](https://v2.xivapi.com) (map images, icons, Hunting Log). Market and
+mob spawn positions are community-crowdsourced via Teamcraft's mappy system.
+Player position comes from local packet capture (Deucalion) — no game files are
+modified.

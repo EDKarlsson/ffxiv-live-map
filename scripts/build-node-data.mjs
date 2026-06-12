@@ -1,28 +1,33 @@
 /**
- * Extract gathering-node data + item names from the Teamcraft checkout into
+ * Extract gathering-node data + item names from Teamcraft's source JSON into
  * compact JSONs bundled with this app.
  *
- * Sources (ffxiv-teamcraft/libs/data/src/lib/json/):
+ * Data is pulled from the ffxiv-teamcraft GitHub repo (staging branch) via
+ * scripts/tc-data-source.mjs — always current, no local checkout needed.
+ * Pass `--local <dir>` to read a local libs/data/src/lib/json instead, or
+ * `--refresh` to bypass the cache.
+ *
+ * Key field notes:
  *   - nodes.json: type (0 Mineral/1 Rocky = MIN, 2 Tree/3 Vegetation = BTN,
  *     4/5 fishing — per apps/client pipes nodeTypeName/nodeTypeIcon), level,
  *     x/y already in in-game MAP coordinates, map id, spawns (ET hours),
- *     limited (timed), ephemeral, legendary, items (item ids), hiddenItems.
+ *     limited (timed), ephemeral, folklore (real Legendary signal — the
+ *     `legendary` boolean is unreliable), items (item ids), hiddenItems.
  *   - items.json: item id -> localized names (we keep `en`).
  *
- * Usage: node scripts/build-node-data.mjs [path-to-teamcraft-json-dir]
+ * Usage: node scripts/build-node-data.mjs [--local <dir>] [--refresh] [--branch <ref>]
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { writeFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { loadTcJson, dataSourceInfo } from "./tc-data-source.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const TC_JSON =
-	process.argv[2] ??
-	join(__dirname, "../../ffxiv-teamcraft/ffxiv-teamcraft/libs/data/src/lib/json");
+console.error(`[build-node-data] source: ${dataSourceInfo()}`);
 
-const nodes = JSON.parse(readFileSync(join(TC_JSON, "nodes.json"), "utf-8"));
-const items = JSON.parse(readFileSync(join(TC_JSON, "items.json"), "utf-8"));
+const nodes = await loadTcJson("nodes.json");
+const items = await loadTcJson("items.json");
 
 const out = {};
 const itemIds = new Set();
@@ -80,8 +85,8 @@ console.log(`nodes: ${Object.keys(out).length}, item names: ${itemIds.size}, gat
 // --- Monsters: monsters.json keyed by mob name id (joins mobs.json), each with
 // positions [{map, zoneid, level, fate, x, y, z}] in in-game map coords.
 // Reshape to per-map: { mapId: { mobId: { levels:[min,max], points:[[x,y,fate]] } } }
-const monsters = JSON.parse(readFileSync(join(TC_JSON, "monsters.json"), "utf-8"));
-const mobNames = JSON.parse(readFileSync(join(TC_JSON, "mobs.json"), "utf-8"));
+const monsters = await loadTcJson("monsters.json");
+const mobNames = await loadTcJson("mobs.json");
 
 const byMap = {};
 const usedMobs = new Set();
@@ -114,7 +119,7 @@ console.log(`monster maps: ${Object.keys(byMap).length}, named mobs: ${usedMobs.
 
 // --- FATEs: fates.json entries with position {map, x, y}; icon is a tex path
 // whose 6-digit id maps to https://xivapi.com/i/060000/<id>.png -----------------
-const fates = JSON.parse(readFileSync(join(TC_JSON, "fates.json"), "utf-8"));
+const fates = await loadTcJson("fates.json");
 const fatesByMap = {};
 for (const [id, f] of Object.entries(fates)) {
 	const p = f.position;
@@ -127,7 +132,7 @@ writeFileSync(join(__dirname, "../data/fates.json"), JSON.stringify(fatesByMap))
 console.log(`fate maps: ${Object.keys(fatesByMap).length}, fates: ${Object.values(fatesByMap).flat().length}`);
 
 // --- NPCs: npcs.json entries with en name + position --------------------------
-const npcs = JSON.parse(readFileSync(join(TC_JSON, "npcs.json"), "utf-8"));
+const npcs = await loadTcJson("npcs.json");
 const npcsByMap = {};
 for (const [id, n] of Object.entries(npcs)) {
 	const p = n.position;
@@ -138,8 +143,8 @@ writeFileSync(join(__dirname, "../data/npcs.json"), JSON.stringify(npcsByMap));
 console.log(`npc maps: ${Object.keys(npcsByMap).length}, npcs: ${Object.values(npcsByMap).flat().length}`);
 
 // --- Maps index for the zone picker: id, name, region (from places.json) ------
-const maps = JSON.parse(readFileSync(join(TC_JSON, "maps.json"), "utf-8"));
-const places = JSON.parse(readFileSync(join(TC_JSON, "places.json"), "utf-8"));
+const maps = await loadTcJson("maps.json");
+const places = await loadTcJson("places.json");
 
 // Maps that actually have any of our content (nodes/monsters/fates/npcs).
 // The `dungeon` flag in maps.json is empty, so "has data" is how we separate

@@ -728,7 +728,10 @@ async function buildPicker() {
 
 function renderPicker() {
 	const contentOnly = document.getElementById("contentOnly").checked;
-	const shown = allMaps.filter((m) => !contentOnly || m.hasData);
+	let shown = allMaps.filter((m) => !contentOnly || m.hasData);
+	// Defensive: if filtering blanks the list (e.g. stale data without hasData),
+	// fall back to showing everything rather than an empty picker.
+	if (contentOnly && shown.length === 0) shown = allMaps;
 	const groups = {};
 	for (const m of shown) (groups[m.region] ??= []).push(m);
 	const sel = document.getElementById("mapPicker");

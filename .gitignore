@@ -2,3 +2,4 @@ node_modules/
 *.log
 .state.json
 custom-markers.json
+scripts/.tc-cache/
