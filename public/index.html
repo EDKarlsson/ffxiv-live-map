@@ -115,6 +115,7 @@
 <div id="hud">
 	<div class="zone" id="zoneName">No zone yet</div>
 	<select id="mapPicker"></select>
+	<label><input type="checkbox" id="contentOnly" checked> Only maps with content</label>
 	<label><input type="checkbox" id="followToggle" checked> Follow player</label>
 	<div id="coords">X: –  Y: –</div>
 	<div id="nodeCount" class="muted"></div>
@@ -708,23 +709,35 @@ map.on("click", async (e) => {
 
 // --- Map browser ---------------------------------------------------------------
 let mapNameById = {};
+let allMaps = [];
+const mapLabel = (m) => `${m.name}${m.sub ? " — " + m.sub : ""}${m.index ? ` · Floor ${m.index + 1}` : ""}`;
+
 async function buildPicker() {
-	const idx = await fetch("/maps").then((r) => r.json());
-	for (const m of idx) mapNameById[m.id] = m.name + (m.sub ? ` — ${m.sub}` : "") + (m.index ? ` (${m.index})` : "");
-	const groups = {};
-	for (const m of idx) (groups[m.region] ??= []).push(m);
+	allMaps = await fetch("/maps").then((r) => r.json());
+	for (const m of allMaps) mapNameById[m.id] = mapLabel(m);
+	renderPicker();
 	const sel = document.getElementById("mapPicker");
-	sel.innerHTML = `<option value="">— select a map —</option>` + Object.keys(groups).sort().map((region) =>
-		`<optgroup label="${region}">` + groups[region]
-			.sort((a, b) => a.name.localeCompare(b.name) || a.index - b.index)
-			.map((m) => `<option value="${m.id}">${m.name}${m.sub ? " — " + m.sub : ""}${m.index ? ` (${m.index})` : ""}</option>`).join("") +
-		`</optgroup>`).join("");
 	sel.onchange = async () => {
 		if (!sel.value) return;
 		setFollow(false);
 		viewMap(await fetch(`/map?id=${sel.value}`).then((r) => r.json()));
 	};
+	document.getElementById("contentOnly").onchange = renderPicker;
 	if (viewedMap) applyPickerSelection(viewedMap); // options loaded after first zone restore
+}
+
+function renderPicker() {
+	const contentOnly = document.getElementById("contentOnly").checked;
+	const shown = allMaps.filter((m) => !contentOnly || m.hasData);
+	const groups = {};
+	for (const m of shown) (groups[m.region] ??= []).push(m);
+	const sel = document.getElementById("mapPicker");
+	sel.innerHTML = `<option value="">— select a map (${shown.length}) —</option>` + Object.keys(groups).sort().map((region) =>
+		`<optgroup label="${region}">` + groups[region]
+			.sort((a, b) => a.name.localeCompare(b.name) || a.index - b.index)
+			.map((m) => `<option value="${m.id}">${mapLabel(m)}</option>`).join("") +
+		`</optgroup>`).join("");
+	if (viewedMap) sel.value = String(viewedMap.id);
 }
 // Reflect the viewed map in the picker + zone label (works once options exist).
 function applyPickerSelection(m) {

@@ -39,7 +39,11 @@ for (const [id, n] of Object.entries(nodes)) {
 		radius: n.radius ?? 0,
 		limited: !!n.limited,
 		ephemeral: !!n.ephemeral,
-		legendary: !!n.legendary,
+		// TC's `legendary` boolean is unreliable (set on 195/225 timed nodes;
+		// node 211 Spruce Log is flagged legendary but GarlandTools says Unspoiled).
+		// Real Legendary nodes are folklore-gated — use folklore presence instead.
+		// Verified vs GarlandTools 2026-06-12.
+		legendary: !!n.folklore,
 		spawns: n.spawns ?? [],
 		duration: n.duration ?? 0,
 		items: n.items,
@@ -136,7 +140,18 @@ console.log(`npc maps: ${Object.keys(npcsByMap).length}, npcs: ${Object.values(n
 // --- Maps index for the zone picker: id, name, region (from places.json) ------
 const maps = JSON.parse(readFileSync(join(TC_JSON, "maps.json"), "utf-8"));
 const places = JSON.parse(readFileSync(join(TC_JSON, "places.json"), "utf-8"));
-const mapsIndex = Object.values(maps)
+
+// Maps that actually have any of our content (nodes/monsters/fates/npcs).
+// The `dungeon` flag in maps.json is empty, so "has data" is how we separate
+// open-world zones from dungeon/raid/instance maps the user wants to filter out.
+const contentMaps = new Set([
+	...Object.values(out).map((n) => n.map),
+	...Object.keys(byMap).map(Number),
+	...Object.keys(fatesByMap).map(Number),
+	...Object.keys(npcsByMap).map(Number),
+]);
+
+let mapsIndex = Object.values(maps)
 	.filter((m) => m.image && m.placename_id)
 	.map((m) => ({
 		id: m.id,
@@ -145,6 +160,18 @@ const mapsIndex = Object.values(maps)
 		region: places[m.region_id]?.en || "Other",
 		territory: m.territory_id,
 		index: m.index,
+		hasData: contentMaps.has(m.id),
 	}));
+
+// Drop exact duplicates (same name + sub + floor); keep the one with content,
+// else the lowest id. These are alt/instanced copies of the same map.
+const dedup = new Map();
+for (const m of mapsIndex) {
+	const key = `${m.name}|${m.sub}|${m.index}`;
+	const prev = dedup.get(key);
+	if (!prev || (m.hasData && !prev.hasData) || (m.hasData === prev.hasData && m.id < prev.id)) dedup.set(key, m);
+}
+mapsIndex = [...dedup.values()];
+
 writeFileSync(join(__dirname, "../data/maps-index.json"), JSON.stringify(mapsIndex));
-console.log(`maps index: ${mapsIndex.length}`);
+console.log(`maps index: ${mapsIndex.length} (with content: ${mapsIndex.filter((m) => m.hasData).length})`);
