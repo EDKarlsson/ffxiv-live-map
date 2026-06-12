@@ -286,12 +286,17 @@ async function loadNodes(m) {
 		const group = n.type <= 1 ? layers.min : n.type <= 3 ? layers.btn : layers.fsh;
 		group.addLayer(mk);
 		if (n.radius > 0) {
+			const radius = n.radius * (m.size_factor / 100);
+			const color = n.type <= 1 ? "#ff9f1c" : n.type <= 3 ? "#39d353" : "#4cc9f0";
+			// Dark casing underneath so the bright ring reads on any terrain.
 			layers.areas.addLayer(L.circle(ll, {
-				radius: n.radius * (m.size_factor / 100),
-				renderer: vectorRenderer,
-				color: n.type <= 1 ? "#e8a33d" : n.type <= 3 ? "#6dbf6d" : "#5da9d6",
-				weight: 2, opacity: 0.85, dashArray: "3 5", lineCap: "round",
-				fillOpacity: 0.1, interactive: false,
+				radius, renderer: vectorRenderer, color: "#000", weight: 5, opacity: 0.45,
+				fill: false, interactive: false,
+			}));
+			layers.areas.addLayer(L.circle(ll, {
+				radius, renderer: vectorRenderer, color,
+				weight: 3, opacity: 1, dashArray: "6 5", lineCap: "round",
+				fillColor: color, fillOpacity: 0.18, interactive: false,
 			}));
 		}
 	}
