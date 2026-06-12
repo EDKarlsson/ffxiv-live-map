@@ -20,23 +20,44 @@ import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import pcap from "@ffxiv-teamcraft/pcap-ffxiv";
 import { mapForTerritory, mapById, convertPosition } from "./coords.mjs";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, watch } from "fs";
 
 const { CaptureInterface } = pcap;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Gathering nodes (built by scripts/build-node-data.mjs from Teamcraft data)
-const nodeDb = JSON.parse(readFileSync(join(__dirname, "../data/nodes.json"), "utf-8"));
-const itemNames = JSON.parse(readFileSync(join(__dirname, "../data/item-names.json"), "utf-8"));
-const monsterDb = JSON.parse(readFileSync(join(__dirname, "../data/monsters.json"), "utf-8"));
-const mobNames = JSON.parse(readFileSync(join(__dirname, "../data/mob-names.json"), "utf-8"));
-const mapsIndex = JSON.parse(readFileSync(join(__dirname, "../data/maps-index.json"), "utf-8"));
-const fateDb = JSON.parse(readFileSync(join(__dirname, "../data/fates.json"), "utf-8"));
-const npcDb = JSON.parse(readFileSync(join(__dirname, "../data/npcs.json"), "utf-8"));
-const huntingLog = JSON.parse(readFileSync(join(__dirname, "../data/hunting-log.json"), "utf-8"));
-const mobMaps = JSON.parse(readFileSync(join(__dirname, "../data/mob-maps.json"), "utf-8"));
-const itemNodes = JSON.parse(readFileSync(join(__dirname, "../data/item-nodes.json"), "utf-8"));
-const allItemNames = JSON.parse(readFileSync(join(__dirname, "../data/item-names-all.json"), "utf-8"));
+// Derived data (built by scripts/build-node-data.mjs + build-hunting-log.mjs).
+// Loaded into mutable bindings + watched, so rebuilding data hot-reloads the
+// daemon — no restart needed during development.
+const DATA_DIR = join(__dirname, "../data");
+const readData = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf-8"));
+
+let nodeDb, itemNames, monsterDb, mobNames, mapsIndex, fateDb, npcDb,
+	huntingLog, mobMaps, itemNodes, allItemNames;
+
+function loadData() {
+	nodeDb = readData("nodes.json");
+	itemNames = readData("item-names.json");
+	monsterDb = readData("monsters.json");
+	mobNames = readData("mob-names.json");
+	mapsIndex = readData("maps-index.json");
+	fateDb = readData("fates.json");
+	npcDb = readData("npcs.json");
+	huntingLog = readData("hunting-log.json");
+	mobMaps = readData("mob-maps.json");
+	itemNodes = readData("item-nodes.json");
+	allItemNames = readData("item-names-all.json");
+}
+loadData();
+
+// Hot-reload on data rebuild (debounced — a build writes many files at once).
+let reloadTimer = null;
+watch(DATA_DIR, () => {
+	clearTimeout(reloadTimer);
+	reloadTimer = setTimeout(() => {
+		try { loadData(); console.log("[data] reloaded after change"); }
+		catch (e) { console.warn("[data] reload failed (mid-write?):", e.message); }
+	}, 500);
+});
 
 // User-placed custom markers, persisted to disk: { mapId: [ {id, x, y, label, color} ] }
 const MARKERS_FILE = join(__dirname, "../custom-markers.json");
