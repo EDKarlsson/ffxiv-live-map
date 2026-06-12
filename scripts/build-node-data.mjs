@@ -85,6 +85,31 @@ writeFileSync(join(__dirname, "../data/monsters.json"), JSON.stringify(byMap));
 writeFileSync(join(__dirname, "../data/mob-names.json"), JSON.stringify(mobNamesOut));
 console.log(`monster maps: ${Object.keys(byMap).length}, named mobs: ${usedMobs.size}`);
 
+// --- FATEs: fates.json entries with position {map, x, y}; icon is a tex path
+// whose 6-digit id maps to https://xivapi.com/i/060000/<id>.png -----------------
+const fates = JSON.parse(readFileSync(join(TC_JSON, "fates.json"), "utf-8"));
+const fatesByMap = {};
+for (const [id, f] of Object.entries(fates)) {
+	const p = f.position;
+	const name = f.name?.en;
+	if (!p || p.map === undefined || !name) continue;
+	const iconId = (f.icon?.match(/(\d{6})\.tex/) ?? [])[1] ?? "060501";
+	(fatesByMap[p.map] ??= []).push({ id: Number(id), name, level: f.level, icon: iconId, x: p.x, y: p.y });
+}
+writeFileSync(join(__dirname, "../data/fates.json"), JSON.stringify(fatesByMap));
+console.log(`fate maps: ${Object.keys(fatesByMap).length}, fates: ${Object.values(fatesByMap).flat().length}`);
+
+// --- NPCs: npcs.json entries with en name + position --------------------------
+const npcs = JSON.parse(readFileSync(join(TC_JSON, "npcs.json"), "utf-8"));
+const npcsByMap = {};
+for (const [id, n] of Object.entries(npcs)) {
+	const p = n.position;
+	if (!p || p.map === undefined || !n.en) continue;
+	(npcsByMap[p.map] ??= []).push({ id: Number(id), name: n.en, title: n.title?.en || "", x: p.x, y: p.y });
+}
+writeFileSync(join(__dirname, "../data/npcs.json"), JSON.stringify(npcsByMap));
+console.log(`npc maps: ${Object.keys(npcsByMap).length}, npcs: ${Object.values(npcsByMap).flat().length}`);
+
 // --- Maps index for the zone picker: id, name, region (from places.json) ------
 const maps = JSON.parse(readFileSync(join(TC_JSON, "maps.json"), "utf-8"));
 const places = JSON.parse(readFileSync(join(TC_JSON, "places.json"), "utf-8"));

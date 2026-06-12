@@ -37,6 +37,10 @@
 		font: 700 10px/12px system-ui; text-align: center;
 	}
 	.mob-dot.fate { background: #8e44ad; }
+	.npc-dot {
+		width: 12px; height: 12px; border-radius: 50%;
+		background: #2e86c1; border: 2px solid #d6eaf8;
+	}
 	#timedPanel { max-height: 30vh; overflow-y: auto; }
 	#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
@@ -66,6 +70,10 @@
 	<details><summary>Monsters</summary>
 		<input type="text" id="mobSearch" placeholder="filter mobs…">
 		<div id="mobList" class="muted">no data for this map</div>
+	</details>
+	<details><summary>NPCs</summary>
+		<input type="text" id="npcSearch" placeholder="search NPCs…">
+		<div id="npcInfo" class="muted"></div>
 	</details>
 </div>
 <div id="status" class="bad">connecting…</div>
@@ -106,11 +114,14 @@ const layers = {
 	min: L.layerGroup().addTo(map),
 	btn: L.layerGroup().addTo(map),
 	fsh: L.layerGroup(),
+	fates: L.layerGroup(),
+	npcs: L.layerGroup().addTo(map),
 };
 L.control.layers(null, {
 	"Miner nodes": layers.min,
 	"Botanist nodes": layers.btn,
 	"Fishing spots": layers.fsh,
+	"FATEs": layers.fates,
 }, { collapsed: true }).addTo(map);
 
 // --- Eorzea Time (math per ffxiv-node-timer: 1 ET hour = 175 real seconds) ----
@@ -264,6 +275,42 @@ async function loadMonsters(m) {
 	renderMobList();
 }
 
+// --- FATEs ----------------------------------------------------------------------
+async function loadFates(m) {
+	layers.fates.clearLayers();
+	const fates = await fetch(`/fates?map=${m.id}`).then((r) => r.json());
+	for (const f of fates) {
+		layers.fates.addLayer(L.marker(coordLL(f.x, f.y), {
+			icon: L.divIcon({ className: "node-icon", html: `<img src="https://xivapi.com/i/060000/${f.icon}.png">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+		}).bindTooltip(`${f.name} (Lv${f.level})`)
+			.bindPopup(`<b>${f.name}</b> <span class="nlvl">FATE Lv${f.level} · (${f.x}, ${f.y})</span>`));
+	}
+}
+
+// --- NPCs (search-driven: 23k total, render only matches) -------------------------
+let npcData = [];
+function renderNpcs() {
+	layers.npcs.clearLayers();
+	const q = document.getElementById("npcSearch").value.trim().toLowerCase();
+	const info = document.getElementById("npcInfo");
+	if (q.length < 2) { info.textContent = `${npcData.length} NPCs on this map — type 2+ chars`; return; }
+	const hits = npcData.filter((n) => n.name.toLowerCase().includes(q) || n.title.toLowerCase().includes(q));
+	for (const n of hits.slice(0, 100)) {
+		layers.npcs.addLayer(L.marker(coordLL(n.x, n.y), {
+			icon: L.divIcon({ className: "", html: `<div class="npc-dot"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }),
+		}).bindTooltip(`${n.name}${n.title ? ` — ${n.title}` : ""}`)
+			.bindPopup(`<b>${n.name}</b>${n.title ? ` <span class="nlvl">${n.title}</span>` : ""}<br><span class="nlvl">(${n.x}, ${n.y})</span><br><a href="https://ffxivteamcraft.com/db/en/npc/${n.id}" target="_blank">Teamcraft DB</a>`));
+	}
+	info.textContent = `${hits.length} match${hits.length === 1 ? "" : "es"}${hits.length > 100 ? " (showing 100)" : ""}`;
+	if (hits.length === 1) map.flyTo(coordLL(hits[0].x, hits[0].y), 1);
+}
+async function loadNpcs(m) {
+	layers.npcs.clearLayers();
+	npcData = await fetch(`/npcs?map=${m.id}`).then((r) => r.json());
+	renderNpcs();
+}
+document.getElementById("npcSearch").oninput = renderNpcs;
+
 // --- Map browser ---------------------------------------------------------------
 async function buildPicker() {
 	const idx = await fetch("/maps").then((r) => r.json());
@@ -300,6 +347,8 @@ function viewMap(m) {
 	document.getElementById("mapPicker").value = String(m.id);
 	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
 	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
+	loadFates(m).catch((e) => console.error("loadFates failed:", e));
+	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
 	refreshMarker();
 }
 

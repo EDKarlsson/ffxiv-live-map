@@ -31,6 +31,8 @@ const itemNames = JSON.parse(readFileSync(join(__dirname, "../data/item-names.js
 const monsterDb = JSON.parse(readFileSync(join(__dirname, "../data/monsters.json"), "utf-8"));
 const mobNames = JSON.parse(readFileSync(join(__dirname, "../data/mob-names.json"), "utf-8"));
 const mapsIndex = JSON.parse(readFileSync(join(__dirname, "../data/maps-index.json"), "utf-8"));
+const fateDb = JSON.parse(readFileSync(join(__dirname, "../data/fates.json"), "utf-8"));
+const npcDb = JSON.parse(readFileSync(join(__dirname, "../data/npcs.json"), "utf-8"));
 
 // --- CLI args ---------------------------------------------------------------
 const args = process.argv.slice(2);
@@ -111,6 +113,14 @@ const server = createServer(async (req, res) => {
 			lmax: m.lmax,
 			points: m.points,
 		})).sort((a, b) => a.lmin - b.lmin || a.name.localeCompare(b.name));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/fates") || req.url.startsWith("/npcs")) {
+		const u = new URL(req.url, "http://localhost");
+		const db = req.url.startsWith("/fates") ? fateDb : npcDb;
+		const list = db[String(Number(u.searchParams.get("map")))] ?? [];
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
 		return;
