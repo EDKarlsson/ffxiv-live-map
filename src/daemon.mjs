@@ -139,6 +139,30 @@ const server = createServer(async (req, res) => {
 		res.end(JSON.stringify(list));
 		return;
 	}
+	if (req.url === "/timed-nodes") {
+		// All timed (unspoiled/ephemeral/legendary) nodes across every map, with
+		// their map id so the "what's up now" planner can route + jump globally.
+		const mapName = Object.fromEntries(mapsIndex.map((m) => [m.id, m.name]));
+		const list = Object.entries(nodeDb)
+			.filter(([, n]) => n.spawns?.length)
+			.map(([id, n]) => ({
+				id: Number(id),
+				type: n.type,
+				level: n.level,
+				map: n.map,
+				mapName: mapName[n.map] ?? `Map ${n.map}`,
+				x: n.x,
+				y: n.y,
+				spawns: n.spawns,
+				duration: n.duration,
+				ephemeral: n.ephemeral,
+				legendary: n.legendary,
+				items: n.items.map((i) => ({ id: i, name: itemNames[i] ?? `#${i}` })),
+			}));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
 	if (req.url.startsWith("/fates") || req.url.startsWith("/npcs")) {
 		const u = new URL(req.url, "http://localhost");
 		const db = req.url.startsWith("/fates") ? fateDb : npcDb;

@@ -69,8 +69,13 @@
 	#timedPanel { max-height: 30vh; overflow-y: auto; }
 	#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
-	#timedPanel .up { color: #8fd98f; }
-	#timedPanel .down { color: #9aa0aa; }
+	#timedPanel .up, #upList .up { color: #8fd98f; }
+	#timedPanel .down, #upList .down { color: #9aa0aa; }
+	#upList { max-height: 38vh; overflow-y: auto; font-size: 12px; }
+	#upList .uprow { cursor: pointer; padding: 2px 0; border-bottom: 1px solid #262932; }
+	#upList .uprow:hover { color: #fff; }
+	#upList .upzone { color: #9aa0aa; font-size: 11px; }
+	#hud label { display: inline-block; margin-right: 6px; }
 	#mobList { max-height: 35vh; overflow-y: auto; }
 	#mobList .lvl { color: #9aa0aa; font-size: 11px; }
 	.leaflet-popup-content-wrapper, .leaflet-popup-tip {
@@ -91,7 +96,21 @@
 	<div id="coords">X: –  Y: –</div>
 	<div id="nodeCount" class="muted"></div>
 	<div id="etClock" class="muted">ET --:--</div>
-	<details open><summary>Timed nodes</summary><div id="timedPanel"></div></details>
+	<details open><summary>Timed nodes (this map)</summary><div id="timedPanel"></div></details>
+	<details><summary>What's up now (all maps)</summary>
+		<div>
+			<label>Job
+				<select id="upJob">
+					<option value="any">Any</option>
+					<option value="min">Miner</option>
+					<option value="btn">Botanist</option>
+				</select>
+			</label>
+			<label>≤ Lv <input type="number" id="upLevel" value="50" min="1" max="100" style="width:48px"></label>
+		</div>
+		<label><input type="checkbox" id="upOnly" checked> Only show what's up now</label>
+		<div id="upList" class="muted">loading…</div>
+	</details>
 	<details><summary>Monsters</summary>
 		<input type="text" id="mobSearch" placeholder="filter mobs…">
 		<div id="mobList" class="muted">no data for this map</div>
@@ -112,14 +131,14 @@
 	</details>
 	<details><summary>Farming route</summary>
 		<select id="routeSource">
-			<option value="min">Miner nodes</option>
-			<option value="btn">Botanist nodes</option>
-			<option value="all">All gathering nodes</option>
 			<option value="list">Teamcraft list nodes</option>
+			<option value="min">Miner nodes (whole map)</option>
+			<option value="btn">Botanist nodes (whole map)</option>
+			<option value="all">All gathering nodes</option>
 		</select>
 		<button id="routePlan">Plan route</button>
 		<button id="routeClear">Clear</button>
-		<div id="routeInfo" class="muted"></div>
+		<div id="routeInfo" class="muted">Best for list runs across separated nodes. Single-material grinding doesn't need a route — one cluster respawns as you circle it.</div>
 	</details>
 	<details><summary>Custom markers</summary>
 		<label><input type="checkbox" id="placeToggle"> Click map to place</label>
@@ -364,6 +383,43 @@ async function loadNpcs(m) {
 	renderNpcs();
 }
 document.getElementById("npcSearch").oninput = renderNpcs;
+
+// --- "What's up now" timed-node planner (all maps) ------------------------------
+let allTimed = [];
+fetch("/timed-nodes").then((r) => r.json()).then((d) => { allTimed = d; renderUp(); });
+
+function renderUp() {
+	const job = document.getElementById("upJob").value;
+	const maxLvl = Number(document.getElementById("upLevel").value) || 100;
+	const upOnly = document.getElementById("upOnly").checked;
+	const el = document.getElementById("upList");
+	if (!allTimed.length) { el.textContent = "loading…"; return; }
+	let rows = allTimed
+		.filter((n) => n.level <= maxLvl)
+		.filter((n) => job === "any" || (job === "min" ? n.type <= 1 : n.type === 2 || n.type === 3))
+		.map((n) => ({ n, st: nodeStatus(n) }))
+		.filter((r) => !upOnly || r.st.up)
+		.sort((a, b) => (a.st.up === b.st.up) ? a.st.secsLeft - b.st.secsLeft : (a.st.up ? -1 : 1))
+		.slice(0, 60);
+	el.innerHTML = rows.length ? rows.map(({ n, st }) =>
+		`<div class="uprow" data-map="${n.map}" data-x="${n.x}" data-y="${n.y}">` +
+		`<span class="${st.up ? "up" : "down"}">${st.up ? "● " + fmtMins(st.secsLeft) + " left" : "○ in " + fmtMins(st.secsLeft)}</span> ` +
+		`Lv${n.level} ${n.items[0]?.name ?? "?"}${n.legendary ? " ⭐" : n.ephemeral ? " ✦" : ""}<br>` +
+		`<span class="upzone">${n.mapName} (${n.x}, ${n.y})</span></div>`).join("")
+		: `<span class="muted">nothing matches</span>`;
+	[...el.querySelectorAll(".uprow")].forEach((row) => {
+		row.onclick = async () => {
+			const mapId = Number(row.dataset.map);
+			if (viewedMap?.id !== mapId) {
+				setFollow(false);
+				await new Promise((res) => { fetch(`/map?id=${mapId}`).then((r) => r.json()).then((m) => { viewMap(m); setTimeout(res, 400); }); });
+			}
+			map.flyTo(coordLL(Number(row.dataset.x), Number(row.dataset.y)), 2);
+		};
+	});
+}
+["upJob", "upLevel", "upOnly"].forEach((id) => document.getElementById(id).addEventListener("input", renderUp));
+setInterval(() => { if (allTimed.length) renderUp(); }, 30000); // refresh countdowns
 
 // --- Hunting Log ----------------------------------------------------------------
 let huntData = null;
