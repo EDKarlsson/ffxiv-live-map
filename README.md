@@ -83,8 +83,8 @@ loaded, the bridge just attaches a new pipe subscriber.
 - [x] Teamcraft list import — Firestore REST read, maps each required item's gathering nodes, checklist + jump
 - [x] Custom markers — click-to-place with label, persisted server-side
 - [x] Map browser — pick any of ~1200 maps (grouped by region), Follow-player toggle
+- [x] Farming routes — nearest-neighbor + 2-opt TSP over node coords, numbered path, starts from your position
 - [x] Data served from XIVAPI v2 asset endpoints (v1 host is frozen)
-- [ ] Optimal farming route calculation
 - [ ] Aether currents / vistas / treasure spots layers
 
 ## Data build
