@@ -54,20 +54,22 @@ Open <http://localhost:8787>, then change zones or move in game.
 Flags: `--bridge-port <n>` (default 31594), `--http-port <n>` (default 8787),
 `--verbose`.
 
-### If Teamcraft's bridge refuses a second client
+### Running alongside Teamcraft (required)
 
-Deucalion itself supports multiple pipe subscribers, so you can run a second
-bridge on another port and point the daemon at it:
+**Confirmed 2026-06-12:** Teamcraft's bridge accepts exactly one client — after
+Teamcraft connects there is no LISTEN socket left on 31594 (verified with
+`lsof`). Deucalion's named pipe *does* support multiple subscribers, so run a
+second bridge on its own port:
 
 ```sh
-WINEPREFIX=<your XIV on Mac prefix> wine \
-  "/Applications/FFXIV Teamcraft.app/Contents/Resources/deucalion-bridge/deucalion-bridge.exe" \
-  --dll-path 'Z:\<path-to>\deucalion.dll' --port 31595
-
-npm run start:own-bridge   # daemon with --bridge-port 31595
+scripts/start-bridge.sh           # spawns bridge on 31595 (keep it running)
+npm run start:own-bridge          # daemon with --bridge-port 31595
 ```
 
-(Exact Wine paths: see Teamcraft's pcap settings / its `packet-capture.ts`.)
+The script mirrors Teamcraft's own launch (XIV on Mac wine + prefix,
+WINEESYNC/WINEMSYNC/WINEFSYNC env) and finds the bridge exe / deucalion.dll
+inside the Teamcraft app bundle. Re-injection is harmless: the DLL is already
+loaded, the bridge just attaches a new pipe subscriber.
 
 ## Roadmap
 
