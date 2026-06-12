@@ -30,7 +30,27 @@
 		background: #4da3ff; border: 2px solid #fff; box-shadow: 0 0 8px #4da3ff;
 	}
 	.node-icon img { width: 26px; height: 26px; filter: drop-shadow(0 0 3px rgba(0,0,0,.8)); }
-	.node-up img { filter: drop-shadow(0 0 6px #ffd470); }
+	/* Active (up-now) timed node: spinning icon + pulsing glow behind it. */
+	.node-icon.node-up { overflow: visible; }
+	.node-icon.node-up img {
+		filter: drop-shadow(0 0 5px #ffd470);
+		animation: node-spin 4s linear infinite;
+		position: relative; z-index: 1;
+	}
+	.node-icon.node-up::before {
+		content: ""; position: absolute; inset: -8px; border-radius: 50%;
+		background: radial-gradient(circle, rgba(255,212,112,.9) 0%, rgba(255,212,112,.35) 45%, transparent 70%);
+		animation: node-glow 1.6s ease-in-out infinite; z-index: 0; pointer-events: none;
+	}
+	@keyframes node-spin { to { transform: rotate(360deg); } }
+	@keyframes node-glow {
+		0%, 100% { opacity: .35; transform: scale(.85); }
+		50% { opacity: .85; transform: scale(1.35); }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.node-icon.node-up img { animation: none; }
+		.node-icon.node-up::before { animation: none; opacity: .6; }
+	}
 	.mob-dot {
 		min-width: 14px; height: 14px; border-radius: 8px; padding: 0 3px; box-sizing: border-box;
 		background: #c0392b; border: 1px solid #f0b1a8; color: #fff;
