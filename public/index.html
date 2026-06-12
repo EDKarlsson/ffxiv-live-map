@@ -103,6 +103,15 @@ async function loadNodes(m) {
 		}).bindPopup(nodePopup(n));
 		const group = n.type <= 1 ? layers.min : n.type <= 3 ? layers.btn : layers.fsh;
 		group.addLayer(mk);
+		// Spawn-scatter area: node.radius is in world units (yalms);
+		// pixels-per-yalm = size_factor/100 (same c as the coord formula).
+		if (n.radius > 0) {
+			group.addLayer(L.circle(ll, {
+				radius: n.radius * (m.size_factor / 100),
+				color: n.type <= 1 ? "#e8a33d" : n.type <= 3 ? "#6dbf6d" : "#5da9d6",
+				weight: 1, opacity: 0.45, fillOpacity: 0.08, interactive: false,
+			}));
+		}
 	}
 	document.getElementById("nodeCount").textContent = `${nodes.length} gathering nodes`;
 }
