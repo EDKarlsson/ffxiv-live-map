@@ -18,12 +18,14 @@
  * Usage: node scripts/build-node-data.mjs [--local <dir>] [--refresh] [--branch <ref>]
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { loadTcJson, dataSourceInfo } from "./tc-data-source.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const OUT_DIR = join(__dirname, "../data");
+mkdirSync(OUT_DIR, { recursive: true });
 console.error(`[build-node-data] source: ${dataSourceInfo()}`);
 
 const nodes = await loadTcJson("nodes.json");
@@ -145,6 +147,10 @@ console.log(`npc maps: ${Object.keys(npcsByMap).length}, npcs: ${Object.values(n
 // --- Maps index for the zone picker: id, name, region (from places.json) ------
 const maps = await loadTcJson("maps.json");
 const places = await loadTcJson("places.json");
+
+// coords.mjs needs the full maps.json at runtime (sizeFactor/offsets/image per
+// territory) for player-position conversion — emit it from the same fetch.
+writeFileSync(join(OUT_DIR, "maps.json"), JSON.stringify(maps));
 
 // Maps that actually have any of our content (nodes/monsters/fates/npcs).
 // The `dungeon` flag in maps.json is empty, so "has data" is how we separate

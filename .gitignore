@@ -3,3 +3,6 @@ node_modules/
 .state.json
 custom-markers.json
 scripts/.tc-cache/
+
+# Derived data — built on first run from Teamcraft GitHub + XIVAPI v2
+data/

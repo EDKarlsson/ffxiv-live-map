@@ -49,6 +49,12 @@ npm install
 npm start            # daemon on http://localhost:8787, bridge port 31594
 ```
 
+On first run, `npm start` builds the bundled data under `data/` (fetched from
+the Teamcraft GitHub repo + XIVAPI v2; takes ~20s, then cached). The `data/`
+dir is gitignored — it's derived, not source. Force a rebuild after a game
+patch with `npm run rebuild-data`. The daemon hot-reloads data when those files
+change, so a rebuild doesn't need a restart.
+
 Open <http://localhost:8787>, then change zones or move in game.
 
 Flags: `--bridge-port <n>` (default 31594), `--http-port <n>` (default 8787),

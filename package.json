@@ -5,6 +5,10 @@
 	"type": "module",
 	"main": "src/daemon.mjs",
 	"scripts": {
+		"build-data": "node scripts/build-node-data.mjs && node scripts/build-hunting-log.mjs",
+		"rebuild-data": "node scripts/ensure-data.mjs --force",
+		"prestart": "node scripts/ensure-data.mjs",
+		"prestart:own-bridge": "node scripts/ensure-data.mjs",
 		"start": "node src/daemon.mjs",
 		"start:own-bridge": "node src/daemon.mjs --bridge-port 31595"
 	},

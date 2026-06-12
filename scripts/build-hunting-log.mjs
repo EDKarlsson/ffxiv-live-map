@@ -14,11 +14,12 @@
  * Usage: node scripts/build-hunting-log.mjs
  */
 
-import { writeFileSync } from "fs";
+import { writeFileSync, mkdirSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+mkdirSync(join(__dirname, "../data"), { recursive: true });
 const API = "https://v2.xivapi.com/api/sheet/MonsterNote?version=latest";
 const FIELDS =
 	"Name,Count," +
