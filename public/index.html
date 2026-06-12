@@ -108,7 +108,9 @@ const coordLL = (x, y) => px2ll(coordToPx(x, viewedMap.size_factor), coordToPx(y
 const TYPE_NAMES = ["Mineral (MIN)", "Rocky (MIN)", "Tree (BTN)", "Vegetation (BTN)", "Fishing", "Spearfishing"];
 const ICONS = ["060438", "060437", "060433", "060432", "060445", "060465"];
 const TIMED_ICONS = ["060464", "060463", "060462", "060461", "060445", "060466"];
-const iconUrl = (n) => `https://xivapi.com/i/060000/${(n.limited || n.spawns.length ? TIMED_ICONS : ICONS)[n.type]}.png`;
+// XIVAPI v2 asset endpoint (v1 /i/ hotlinks are deprecated)
+const gameIcon = (id) => `https://v2.xivapi.com/api/asset?path=ui/icon/060000/${id}.tex&format=png`;
+const iconUrl = (n) => gameIcon((n.limited || n.spawns.length ? TIMED_ICONS : ICONS)[n.type]);
 
 const layers = {
 	min: L.layerGroup().addTo(map),
@@ -281,7 +283,7 @@ async function loadFates(m) {
 	const fates = await fetch(`/fates?map=${m.id}`).then((r) => r.json());
 	for (const f of fates) {
 		layers.fates.addLayer(L.marker(coordLL(f.x, f.y), {
-			icon: L.divIcon({ className: "node-icon", html: `<img src="https://xivapi.com/i/060000/${f.icon}.png">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+			icon: L.divIcon({ className: "node-icon", html: `<img src="${gameIcon(f.icon)}">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
 		}).bindTooltip(`${f.name} (Lv${f.level})`)
 			.bindPopup(`<b>${f.name}</b> <span class="nlvl">FATE Lv${f.level} · (${f.x}, ${f.y})</span>`));
 	}
