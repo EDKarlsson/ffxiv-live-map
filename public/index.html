@@ -161,9 +161,14 @@ map.fitBounds(bounds);
 
 // Dedicated pane for the base map image, below the overlay pane (z 400) so
 // vector overlays (spawn-area circles, route lines) always render on top of it.
-// Without this, the image loads ~1s after the circles and paints over them.
+// Without this, the image (added to overlayPane) paints over the circles.
 map.createPane("basemap");
 map.getPane("basemap").style.zIndex = 250;
+// Dedicated SVG renderer in a high pane so spawn-area circles/route lines are
+// guaranteed above the base image regardless of add order.
+map.createPane("vectors");
+map.getPane("vectors").style.zIndex = 450;
+const vectorRenderer = L.svg({ pane: "vectors" });
 
 let overlay = null;
 let marker = null;
@@ -202,7 +207,7 @@ const layers = {
 L.control.layers(null, {
 	"Miner nodes": layers.min,
 	"Botanist nodes": layers.btn,
-	"Fishing spots": layers.fsh,
+	"Fishing/spearfishing": layers.fsh,
 	"Spawn areas": layers.areas,
 	"FATEs": layers.fates,
 }, { collapsed: false, position: "bottomright" }).addTo(map);
@@ -283,9 +288,10 @@ async function loadNodes(m) {
 		if (n.radius > 0) {
 			layers.areas.addLayer(L.circle(ll, {
 				radius: n.radius * (m.size_factor / 100),
+				renderer: vectorRenderer,
 				color: n.type <= 1 ? "#e8a33d" : n.type <= 3 ? "#6dbf6d" : "#5da9d6",
-				weight: 2, opacity: 0.7, dashArray: "2 6", lineCap: "round",
-				fillOpacity: 0.08, interactive: false,
+				weight: 2, opacity: 0.85, dashArray: "3 5", lineCap: "round",
+				fillOpacity: 0.1, interactive: false,
 			}));
 		}
 	}
@@ -540,7 +546,7 @@ function planRoute() {
 		? { x: lastPos.mapX, y: lastPos.mapY, isStart: true } : null;
 	const ordered = tour(pts, start);
 	const latlngs = ordered.map((p) => coordLL(p.x, p.y));
-	routeLayer.addLayer(L.polyline(latlngs, { color: "#2ecc71", weight: 2.5, opacity: 0.85, dashArray: "6 6" }));
+	routeLayer.addLayer(L.polyline(latlngs, { renderer: vectorRenderer, color: "#2ecc71", weight: 2.5, opacity: 0.85, dashArray: "6 6" }));
 	let total = 0;
 	for (let i = 1; i < ordered.length; i++) total += dist(ordered[i - 1], ordered[i]);
 	ordered.forEach((p, i) => {
