@@ -1,0 +1,19 @@
+{
+	"name": "ffxiv-live-map",
+	"version": "0.1.0",
+	"description": "Standalone live map for FFXIV — player position via Teamcraft's pcap-ffxiv (Deucalion TCP bridge), rendered in a browser.",
+	"type": "module",
+	"main": "src/daemon.mjs",
+	"scripts": {
+		"start": "node src/daemon.mjs",
+		"start:own-bridge": "node src/daemon.mjs --bridge-port 31595"
+	},
+	"engines": {
+		"node": ">=18"
+	},
+	"dependencies": {
+		"@ffxiv-teamcraft/pcap-ffxiv": "1.2.33",
+		"ws": "^8.18.0"
+	},
+	"license": "MIT"
+}

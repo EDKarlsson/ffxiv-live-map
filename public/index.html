@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>FFXIV Live Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<style>
+	:root { color-scheme: dark; }
+	html, body { margin: 0; height: 100%; background: #15171c; color: #e6e6e6; font-family: system-ui, sans-serif; }
+	#map { height: 100%; background: #15171c; }
+	#hud {
+		position: absolute; top: 10px; right: 10px; z-index: 1000;
+		background: rgba(20, 22, 28, 0.85); border: 1px solid #333; border-radius: 8px;
+		padding: 10px 14px; font-size: 13px; line-height: 1.5; min-width: 180px;
+	}
+	#hud .zone { font-weight: 600; }
+	#hud .muted { color: #9aa0aa; }
+	#status { position: absolute; bottom: 10px; left: 10px; z-index: 1000; font-size: 12px;
+		padding: 4px 10px; border-radius: 6px; background: rgba(20,22,28,.85); border: 1px solid #333; }
+	#status.ok { color: #7fd17f; } #status.bad { color: #e07a7a; }
+	.player-dot {
+		width: 14px; height: 14px; border-radius: 50%;
+		background: #4da3ff; border: 2px solid #fff; box-shadow: 0 0 8px #4da3ff;
+	}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="hud">
+	<div class="zone" id="zoneName">No zone yet</div>
+	<div class="muted">Change zones or move to sync</div>
+	<div id="coords">X: –  Y: –</div>
+</div>
+<div id="status" class="bad">connecting…</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+const IMG = 2048; // xivapi map images are 2048x2048
+
+const map = L.map("map", { crs: L.CRS.Simple, minZoom: -2, maxZoom: 3, zoomSnap: 0.25 });
+const bounds = [[0, 0], [IMG, IMG]];
+map.fitBounds(bounds);
+
+let overlay = null;
+let marker = null;
+
+// Leaflet Simple CRS: latlng = [y-up, x]; image pixel y grows downward.
+const px2ll = (x, y) => [IMG - y, x];
+
+function setZone(m) {
+	if (overlay) { overlay.remove(); overlay = null; }
+	if (marker) { marker.remove(); marker = null; }
+	if (!m) { document.getElementById("zoneName").textContent = "Unknown zone"; return; }
+	overlay = L.imageOverlay(m.image, bounds).addTo(map);
+	map.fitBounds(bounds);
+	document.getElementById("zoneName").textContent = `Map #${m.id} (territory ${m.territory_id})`;
+}
+
+function setPos(p) {
+	const ll = px2ll(p.pixelX, p.pixelY);
+	if (!marker) {
+		marker = L.marker(ll, { icon: L.divIcon({ className: "player-dot", iconSize: [14, 14] }) }).addTo(map);
+	} else {
+		marker.setLatLng(ll);
+	}
+	document.getElementById("coords").textContent =
+		`X: ${p.mapX.toFixed(1)}  Y: ${p.mapY.toFixed(1)}`;
+}
+
+function connect() {
+	const ws = new WebSocket(`ws://${location.host}`);
+	const status = document.getElementById("status");
+	ws.onopen = () => { status.textContent = "live"; status.className = "ok"; };
+	ws.onclose = () => {
+		status.textContent = "disconnected — retrying"; status.className = "bad";
+		setTimeout(connect, 2000);
+	};
+	ws.onmessage = (ev) => {
+		const msg = JSON.parse(ev.data);
+		if (msg.type === "state") {
+			if (msg.state.map) setZone(msg.state.map);
+			if (msg.state.pos) setPos(msg.state.pos);
+		} else if (msg.type === "zone") {
+			setZone(msg.map);
+		} else if (msg.type === "pos") {
+			setPos(msg.pos);
+		}
+	};
+}
+connect();
+</script>
+</body>
+</html>
