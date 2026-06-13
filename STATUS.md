@@ -116,3 +116,16 @@ See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
    the game. Per the research: Electron BrowserWindow {transparent, frame:
    false, alwaysOnTop} + setIgnoreMouseEvents; works over fullscreen-windowed
    FFXIV. Tauri rejected (macOS transparency = private API + open bugs).
+7. **Map labels** — place-name text on the map (toggleable), like the in-game
+   map. Likely source: the game's MapMarker sheet via XIVAPI v2 (drives the
+   in-game labels); needs probing — do NOT trust icon/type ids from memory.
+8. **Real icons for dots/markers** — replace the colored npc/mob dots and
+   emoji pins with in-game icons (already have the v2 asset endpoint pattern;
+   MapMarker rows carry icon ids per POI type).
+9. **Zone links** — clickable exit markers at zone borders that jump to the
+   adjacent map (MapMarker map-link entries carry the target map id).
+10. **Specialty-location markers** — materia melder, repairs, company chest,
+    market boards, aetherytes (TC aetherytes.json exists too), summoning
+    bells, chocobokeep, gatekeeper, guilds, grand companies. Mostly MapMarker
+    rows with their in-game icons; one build extract likely covers 7/9/10 and
+    feeds 8.
