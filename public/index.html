@@ -24,12 +24,25 @@
 	#hud summary { cursor: pointer; font-weight: 600; }
 	#status { position: absolute; bottom: 10px; left: 10px; z-index: 1000; font-size: 12px;
 		padding: 4px 10px; border-radius: 6px; background: rgba(20,22,28,.85); border: 1px solid #333; }
-	#status.ok { color: #7fd17f; } #status.bad { color: #e07a7a; }
+	#status.ok { color: #7fd17f; } #status.bad { color: #e07a7a; } #status.warn { color: #e8c36a; }
+	/* Icon sizing: every category scales via a --sz-* CSS variable set from the
+	   "Icon sizes" panel (live, no marker rebuild). Inner elements are scaled —
+	   never the Leaflet marker root, whose transform Leaflet owns. The `translate`
+	   and `scale` properties are used (not `transform`) so the node-spin
+	   animation's transform doesn't clobber them. */
 	.player-dot {
-		width: 14px; height: 14px; border-radius: 50%;
+		width: calc(14px * var(--sz-player, 1)); height: calc(14px * var(--sz-player, 1)); border-radius: 50%;
 		background: #4da3ff; border: 2px solid #fff; box-shadow: 0 0 8px #4da3ff;
+		position: relative; left: 50%; top: 50%; translate: -50% -50%;
 	}
-	.node-icon img { width: 26px; height: 26px; filter: drop-shadow(0 0 3px rgba(0,0,0,.8)); }
+	.node-icon img {
+		--sz: var(--sz-node, 1);
+		width: calc(26px * var(--sz)); height: calc(26px * var(--sz));
+		filter: drop-shadow(0 0 3px rgba(0,0,0,.8));
+		position: relative; left: 50%; top: 50%; translate: -50% -50%;
+	}
+	.fate-icon img { --sz: var(--sz-fate, 1); }
+	.fish-icon img { --sz: var(--sz-fish, 1); }
 	/* Active (up-now) timed node: spinning icon + pulsing glow behind it. */
 	.node-icon.node-up { overflow: visible; }
 	.node-icon.node-up img {
@@ -55,18 +68,39 @@
 		min-width: 14px; height: 14px; border-radius: 8px; padding: 0 3px; box-sizing: border-box;
 		background: #c0392b; border: 1px solid #f0b1a8; color: #fff;
 		font: 700 10px/12px system-ui; text-align: center;
+		scale: var(--sz-mob, 1);
 	}
 	.mob-dot.fate { background: #8e44ad; }
 	.npc-dot {
 		width: 12px; height: 12px; border-radius: 50%;
 		background: #2e86c1; border: 2px solid #d6eaf8;
+		scale: var(--sz-npc, 1);
 	}
 	#huntList { max-height: 40vh; overflow-y: auto; font-size: 12px; }
 	#huntList .rank { color: #e8c36a; font-weight: 600; margin-top: 4px; }
 	#huntList .htgt { cursor: pointer; padding: 1px 0 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 	#huntList .htgt:hover { color: #fff; }
 	#huntList .hcount { color: #9aa0aa; }
-	.custom-pin { font-size: 22px; line-height: 22px; text-align: center; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
+	.custom-pin { font-size: calc(22px * var(--sz-cust, 1)); line-height: 22px; text-align: center; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
+	.emoji-pin { --sz: 1; font-size: calc(18px * var(--sz)); line-height: 18px; text-align: center; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
+	.vista-pin { --sz: var(--sz-vista, 1); }
+	.current-pin { --sz: var(--sz-cur, 1); }
+	.treasure-pin { --sz: var(--sz-tre, 1); }
+	#sizePanel { font-size: 12px; }
+	#sizePanel .srow { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+	#sizePanel label { flex: 0 0 110px; margin: 0; }
+	#sizePanel input[type=range] { flex: 1; min-width: 60px; }
+	#sizePanel .sval { flex: 0 0 32px; color: #9aa0aa; text-align: right; }
+	#matList { max-height: 30vh; overflow-y: auto; font-size: 12px; }
+	#matList .mat { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	#matList .mat:hover { color: #fff; }
+	#matList .mq { color: #9aa0aa; font-size: 11px; }
+	#treasureList { max-height: 30vh; overflow-y: auto; font-size: 12px; }
+	#treasureList .lvl { color: #9aa0aa; font-size: 11px; }
+	#aetherInfo { font-size: 12px; }
+	#aetherInfo .aq { color: #9aa0aa; padding-left: 8px; }
+	.leaflet-popup-content .vista-open { color: #8fd98f; }
+	.leaflet-popup-content .vista-closed { color: #9aa0aa; }
 	.placing { cursor: crosshair; }
 	#iconPalette { margin: 4px 0; }
 	#iconPalette span {
@@ -143,6 +177,16 @@
 		<input type="text" id="npcSearch" placeholder="search NPCs…">
 		<div id="npcInfo" class="muted"></div>
 	</details>
+	<details><summary>Find material</summary>
+		<input type="text" id="matSearch" placeholder="search gatherable items…">
+		<div id="matList" class="muted">type 2+ chars — click a result to jump</div>
+	</details>
+	<details><summary>Treasure maps</summary>
+		<div id="treasureList" class="muted">no spots on this map</div>
+	</details>
+	<details><summary>Aether currents</summary>
+		<div id="aetherInfo" class="muted">none on this map</div>
+	</details>
 	<details><summary>Hunting Log</summary>
 		<select id="huntClass"></select>
 		<div id="huntList"></div>
@@ -168,6 +212,10 @@
 		<label><input type="checkbox" id="placeToggle"> Click map to place</label>
 		<div id="iconPalette"></div>
 		<div class="muted" id="markerHint">Place mode off. Click a marker to delete.</div>
+	</details>
+	<details><summary>Icon sizes</summary>
+		<div id="sizePanel"></div>
+		<button id="sizeReset">Reset</button>
 	</details>
 </div>
 <div id="status" class="bad">connecting…</div>
@@ -221,16 +269,22 @@ const layers = {
 	min: L.layerGroup().addTo(map),
 	btn: L.layerGroup().addTo(map),
 	fsh: L.layerGroup(),
+	fishing: L.layerGroup(),  // fishing holes (fishing-log spots; spearfishing stays in fsh)
 	areas: L.layerGroup().addTo(map), // spawn-radius circles (own layer so they're toggleable & stable)
 	fates: L.layerGroup(),
 	npcs: L.layerGroup().addTo(map),
+	vistas: L.layerGroup(),
+	currents: L.layerGroup(),
 };
 L.control.layers(null, {
 	"Miner nodes": layers.min,
 	"Botanist nodes": layers.btn,
-	"Fishing/spearfishing": layers.fsh,
+	"Spearfishing nodes": layers.fsh,
+	"Fishing holes": layers.fishing,
 	"Spawn areas": layers.areas,
 	"FATEs": layers.fates,
+	"Vistas": layers.vistas,
+	"Aether currents": layers.currents,
 }, { collapsed: false, position: "bottomright" }).addTo(map);
 
 // --- Eorzea Time (math per ffxiv-node-timer: 1 ET hour = 175 real seconds) ----
@@ -294,7 +348,9 @@ function nodePopup(n) {
 
 let nodeData = []; // gathering nodes on the viewed map (for route planning)
 async function loadNodes(m) {
-	Object.values(layers).forEach((l) => l.clearLayers());
+	// Clear only this loader's layers — clearing all of them raced the other
+	// loaders (a fast /fates or /vistas response got wiped by this clear).
+	[layers.min, layers.btn, layers.fsh, layers.areas].forEach((l) => l.clearLayers());
 	timedMarkers = [];
 	const nodes = await fetch(`/nodes?map=${m.id}`).then((r) => r.json());
 	nodeData = nodes;
@@ -398,7 +454,7 @@ async function loadFates(m) {
 	const fates = await fetch(`/fates?map=${m.id}`).then((r) => r.json());
 	for (const f of fates) {
 		layers.fates.addLayer(L.marker(coordLL(f.x, f.y), {
-			icon: L.divIcon({ className: "node-icon", html: `<img src="${gameIcon(f.icon)}">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+			icon: L.divIcon({ className: "node-icon fate-icon", html: `<img src="${gameIcon(f.icon)}">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
 		}).bindTooltip(`${f.name} (Lv${f.level})`)
 			.bindPopup(`<b>${f.name}</b> <span class="nlvl">FATE Lv${f.level} · (${f.x}, ${f.y})</span>`));
 	}
@@ -427,6 +483,160 @@ async function loadNpcs(m) {
 	renderNpcs();
 }
 document.getElementById("npcSearch").oninput = renderNpcs;
+
+// --- Fishing holes (fishing-log spots; coords already in-game map coords) --------
+async function loadFishing(m) {
+	layers.fishing.clearLayers();
+	const spots = await fetch(`/fishing-spots?map=${m.id}`).then((r) => r.json());
+	for (const s of spots) {
+		const ll = coordLL(s.x, s.y);
+		const fish = s.fishes.map((f) => `<a href="https://www.garlandtools.org/db/#item/${f.id}" target="_blank">${f.name}</a>`).join(", ");
+		layers.fishing.addLayer(L.marker(ll, {
+			icon: L.divIcon({ className: "node-icon fish-icon", html: `<img src="${gameIcon("060445")}">`, iconSize: [26, 26], iconAnchor: [13, 13] }),
+		}).bindTooltip(`Fishing hole (Lv${s.level})`)
+			.bindPopup(`<b>Fishing hole</b> <span class="nlvl">Lv${s.level} · (${s.x}, ${s.y})</span><br>${fish}`));
+		if (s.radius > 0) {
+			// Circle lives in this layer (not `areas`) so it toggles with the spot.
+			layers.fishing.addLayer(L.circle(ll, {
+				radius: s.radius * (m.size_factor / 100), renderer: vectorRenderer, color: "#4cc9f0",
+				weight: 2, opacity: 0.9, dashArray: "6 5", fillColor: "#4cc9f0", fillOpacity: 0.12, interactive: false,
+			}));
+		}
+	}
+}
+
+// --- Treasure-map dig spots (per-tier toggles, like the monster list) -------------
+let treasureData = [];
+const treasureLayers = new Map(); // tier item id -> layerGroup
+const treasureChecked = new Set();
+
+function showTier(item) {
+	if (treasureLayers.has(item)) return;
+	const g = L.layerGroup().addTo(map);
+	for (const t of treasureData.filter((x) => x.item === item)) {
+		g.addLayer(L.marker(coordLL(t.x, t.y), {
+			icon: L.divIcon({ className: "", html: `<div class="emoji-pin treasure-pin">❌</div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
+		}).bindTooltip(`${t.itemName}${t.party > 1 ? ` (party of ${t.party})` : ""}`)
+			.bindPopup(`<b>${t.itemName}</b> <span class="nlvl">dig spot · (${t.x}, ${t.y})${t.party > 1 ? ` · ${t.party}-player` : ""}</span><br>` +
+				`<a href="https://www.garlandtools.org/db/#item/${t.item}" target="_blank">GarlandTools</a>`));
+	}
+	treasureLayers.set(item, g);
+}
+
+function renderTreasureList() {
+	const el = document.getElementById("treasureList");
+	const tiers = new Map(); // item id -> {name, count}
+	for (const t of treasureData) {
+		const e = tiers.get(t.item) ?? { name: t.itemName, count: 0 };
+		e.count++;
+		tiers.set(t.item, e);
+	}
+	el.innerHTML = tiers.size
+		? [...tiers.entries()].map(([item, e]) =>
+			`<div><label><input type="checkbox" data-item="${item}" ${treasureChecked.has(item) ? "checked" : ""}> ` +
+			`${e.name} <span class="lvl">·${e.count}</span></label></div>`).join("")
+		: `<span class="muted">no spots on this map</span>`;
+	[...el.querySelectorAll("input[type=checkbox]")].forEach((cb) => {
+		cb.onchange = () => {
+			const item = Number(cb.dataset.item);
+			if (cb.checked) { treasureChecked.add(item); showTier(item); }
+			else { treasureChecked.delete(item); treasureLayers.get(item)?.remove(); treasureLayers.delete(item); }
+		};
+	});
+}
+
+async function loadTreasures(m) {
+	treasureLayers.forEach((g) => g.remove());
+	treasureLayers.clear();
+	treasureChecked.clear();
+	treasureData = await fetch(`/treasures?map=${m.id}`).then((r) => r.json());
+	renderTreasureList();
+}
+
+// --- Find material (search item->nodes index, click to jump) ----------------------
+const matLayer = L.layerGroup().addTo(map);
+let matTimer = null;
+
+async function matJump(hit) {
+	// Prefer a node on the viewed map; otherwise go to the item's first map.
+	const n = hit.nodes.find((x) => x.map === viewedMap?.id) ?? hit.nodes[0];
+	if (!n) return;
+	if (n.map !== viewedMap?.id) {
+		setFollow(false);
+		await new Promise((r) => { fetch(`/map?id=${n.map}`).then((x) => x.json()).then((m) => { viewMap(m); setTimeout(r, 400); }); });
+	}
+	// Ring every node of this item on the (now) viewed map.
+	matLayer.clearLayers();
+	for (const x of hit.nodes.filter((x) => x.map === viewedMap.id)) {
+		matLayer.addLayer(L.marker(coordLL(x.x, x.y), {
+			icon: L.divIcon({ className: "", html: `<div class="list-node-ring"></div>`, iconSize: [34, 34], iconAnchor: [17, 17] }),
+			interactive: false,
+		}));
+	}
+	map.flyTo(coordLL(n.x, n.y), 2);
+}
+
+function renderMatHits(hits) {
+	const el = document.getElementById("matList");
+	el.innerHTML = hits.length
+		? hits.map((h, i) =>
+			`<div class="mat" data-i="${i}">${h.name} <span class="mq">· ${h.nodes.length} spot${h.nodes.length === 1 ? "" : "s"}, ${h.maps.length} map${h.maps.length === 1 ? "" : "s"}${h.maps.includes(viewedMap?.id) ? " · 📍 here" : ""}</span></div>`).join("")
+		: `<span class="muted">no gatherable item matches</span>`;
+	[...el.querySelectorAll(".mat")].forEach((row) => {
+		row.onclick = () => matJump(hits[Number(row.dataset.i)]);
+	});
+}
+
+document.getElementById("matSearch").oninput = () => {
+	clearTimeout(matTimer);
+	matTimer = setTimeout(async () => {
+		const q = document.getElementById("matSearch").value.trim();
+		if (q.length < 2) { document.getElementById("matList").innerHTML = `<span class="muted">type 2+ chars — click a result to jump</span>`; matLayer.clearLayers(); return; }
+		renderMatHits(await fetch(`/find-material?q=${encodeURIComponent(q)}`).then((r) => r.json()));
+	}, 250);
+};
+
+// --- Vistas (sightseeing log; ET window is HMM-encoded, e.g. 1159 = 11:59) --------
+const fmtVT = (t) => `${String(Math.floor(t / 100)).padStart(2, "0")}:${String(t % 100).padStart(2, "0")}`;
+const vistaAlways = (v) => v.minTime === 0 && (v.maxTime === 0 || v.maxTime === 2359);
+function vistaOpen(v) {
+	if (vistaAlways(v)) return true;
+	const h = etHoursNow();
+	const cur = Math.floor(h) * 100 + Math.floor((h * 60) % 60);
+	return v.minTime <= v.maxTime ? cur >= v.minTime && cur <= v.maxTime : cur >= v.minTime || cur <= v.maxTime;
+}
+async function loadVistas(m) {
+	layers.vistas.clearLayers();
+	const vistas = await fetch(`/vistas?map=${m.id}`).then((r) => r.json());
+	for (const v of vistas) {
+		layers.vistas.addLayer(L.marker(coordLL(v.x, v.y), {
+			icon: L.divIcon({ className: "", html: `<div class="emoji-pin vista-pin">🔭</div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
+		}).bindTooltip(`Vista: ${v.name}`)
+			.bindPopup(() => {
+				const win = vistaAlways(v) ? "any time"
+					: `ET ${fmtVT(v.minTime)}–${fmtVT(v.maxTime)} <span class="${vistaOpen(v) ? "vista-open" : "vista-closed"}">${vistaOpen(v) ? "● open now" : "○ closed"}</span>`;
+				return `<b>${v.name}</b> <span class="nlvl">vista · ${v.place} · (${v.x}, ${v.y})</span><br>` +
+					`${win}${v.emote ? ` · /${v.emote.toLowerCase()}` : ""}<br>` +
+					`<span class="nlvl">Some vistas also need specific weather (not in game data — check the wiki)</span>`;
+			}));
+	}
+}
+
+// --- Aether currents (HW+ zones only; quest-locked ones have no field position) ---
+async function loadCurrents(m) {
+	layers.currents.clearLayers();
+	const d = await fetch(`/aether-currents?map=${m.id}`).then((r) => r.json());
+	for (const c of d.fields) {
+		layers.currents.addLayer(L.marker(coordLL(c.x, c.y), {
+			icon: L.divIcon({ className: "", html: `<div class="emoji-pin current-pin">🌀</div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
+		}).bindTooltip("Aether current")
+			.bindPopup(`<b>Aether current</b> <span class="nlvl">(${c.x}, ${c.y})</span>`));
+	}
+	const info = document.getElementById("aetherInfo");
+	if (!d.fields.length && !d.quests.length) { info.innerHTML = `<span class="muted">none on this map (ARR zones have no currents)</span>`; return; }
+	info.innerHTML = `${d.fields.length} field current${d.fields.length === 1 ? "" : "s"} (toggle layer to show)` +
+		(d.quests.length ? `<br>+${d.quests.length} from quests:` + d.quests.map((q) => `<div class="aq">· ${q}</div>`).join("") : "");
+}
 
 // --- "What's up now" timed-node planner (all maps) ------------------------------
 let allTimed = [];
@@ -602,7 +812,9 @@ document.getElementById("listImport").onclick = async () => {
 	if (res.error) { info.textContent = `error: ${res.error}`; return; }
 	listData = res;
 	const gatherable = res.items.filter((i) => i.gatherable);
-	info.textContent = `${res.name}: ${gatherable.length}/${res.items.length} items gatherable`;
+	const other = res.items.length - gatherable.length;
+	info.textContent = `${res.name}: ${gatherable.length} material${gatherable.length === 1 ? "" : "s"} to gather` +
+		(other ? ` (${other} crafted/bought hidden)` : "");
 	renderList();
 	highlightListNodes();
 };
@@ -610,13 +822,27 @@ document.getElementById("listImport").onclick = async () => {
 function renderList() {
 	const list = document.getElementById("listItems");
 	if (!listData) { list.innerHTML = ""; return; }
-	list.innerHTML = listData.items.map((it, i) => {
+	// Finals = the list's outputs (gear/crafts) — context only, not clickable
+	// unless directly gatherable. Materials = Teamcraft's full ingredient
+	// breakdown; we show the gatherable ones with remaining amounts.
+	const finalRows = (listData.finals ?? []).map((it) =>
+		`<div class="lrow nogather"><span class="lq">${it.amount}×</span> ${it.name}</div>`).join("");
+	const mats = listData.items
+		.map((it, i) => ({ it, i }))
+		.filter(({ it }) => it.gatherable)
+		.sort((a, b) => a.it.name.localeCompare(b.it.name));
+	const matRows = mats.map(({ it, i }) => {
 		const onMap = viewedMap && it.maps.includes(viewedMap.id);
-		return `<div class="lrow ${it.gatherable ? "" : "nogather"}" data-i="${i}">` +
-			`<span class="lq">${it.amount}×</span> ${it.name}` +
-			`${it.gatherable ? (onMap ? " 📍" : ` <span class="lq">→ ${it.maps.length} map${it.maps.length > 1 ? "s" : ""}</span>`) : ""}</div>`;
+		const left = Math.max(0, it.amount - it.done);
+		return `<div class="lrow" data-i="${i}">` +
+			`<span class="lq">${left}×</span> ${it.name}` +
+			`${onMap ? " 📍" : ` <span class="lq">→ ${it.maps.length} map${it.maps.length > 1 ? "s" : ""}</span>`}</div>`;
 	}).join("");
-	[...list.querySelectorAll(".lrow:not(.nogather)")].forEach((el) => {
+	list.innerHTML =
+		(finalRows ? `<div class="lq" style="margin-top:4px">Final items</div>${finalRows}` : "") +
+		`<div class="lq" style="margin-top:4px">To gather</div>` +
+		(matRows || `<span class="muted">nothing gatherable in this list</span>`);
+	[...list.querySelectorAll(".lrow[data-i]")].forEach((el) => {
 		el.onclick = async () => {
 			const it = listData.items[Number(el.dataset.i)];
 			const n = it.nodes.find((x) => x.map === viewedMap?.id) ?? it.nodes[0];
@@ -707,6 +933,56 @@ map.on("click", async (e) => {
 	addCustomMarker(cm);
 });
 
+// --- Icon sizes (per category, CSS-variable driven, persisted) --------------------
+// Sliders set --sz-* on :root; the marker CSS scales inner elements live, so
+// nothing needs re-rendering. Stored in localStorage.
+const SIZE_CATS = [
+	["node", "Gathering nodes"],
+	["fish", "Fishing holes"],
+	["fate", "FATEs"],
+	["mob", "Monsters"],
+	["npc", "NPCs"],
+	["vista", "Vistas"],
+	["cur", "Aether currents"],
+	["tre", "Treasure"],
+	["cust", "Custom markers"],
+	["player", "Player dot"],
+];
+let iconSizes = {};
+try { iconSizes = JSON.parse(localStorage.getItem("iconSizes") ?? "{}"); } catch { /* fresh */ }
+
+function applySizes() {
+	for (const [key] of SIZE_CATS) {
+		document.documentElement.style.setProperty(`--sz-${key}`, iconSizes[key] ?? 1);
+	}
+}
+function buildSizePanel() {
+	const panel = document.getElementById("sizePanel");
+	panel.innerHTML = SIZE_CATS.map(([key, label]) => {
+		const v = iconSizes[key] ?? 1;
+		return `<div class="srow"><label for="sz-${key}">${label}</label>` +
+			`<input type="range" id="sz-${key}" data-k="${key}" min="0.5" max="3" step="0.25" value="${v}">` +
+			`<span class="sval" id="szv-${key}">${v}×</span></div>`;
+	}).join("");
+	[...panel.querySelectorAll("input[type=range]")].forEach((sl) => {
+		sl.oninput = () => {
+			const k = sl.dataset.k;
+			iconSizes[k] = Number(sl.value);
+			document.getElementById(`szv-${k}`).textContent = `${sl.value}×`;
+			localStorage.setItem("iconSizes", JSON.stringify(iconSizes));
+			applySizes();
+		};
+	});
+}
+document.getElementById("sizeReset").onclick = () => {
+	iconSizes = {};
+	localStorage.removeItem("iconSizes");
+	applySizes();
+	buildSizePanel();
+};
+applySizes();
+buildSizePanel();
+
 // --- Map browser ---------------------------------------------------------------
 let mapNameById = {};
 let allMaps = [];
@@ -769,9 +1045,14 @@ function viewMap(m) {
 	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
 	loadFates(m).catch((e) => console.error("loadFates failed:", e));
 	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
+	loadFishing(m).catch((e) => console.error("loadFishing failed:", e));
+	loadTreasures(m).catch((e) => console.error("loadTreasures failed:", e));
+	loadVistas(m).catch((e) => console.error("loadVistas failed:", e));
+	loadCurrents(m).catch((e) => console.error("loadCurrents failed:", e));
 	if (huntData) renderHunt(); // refresh 📍 here-markers for the new map
 	if (listData) { renderList(); highlightListNodes(); }
 	routeLayer.clearLayers();
+	matLayer.clearLayers(); // material-search rings are per-map highlights
 	document.getElementById("routeInfo").textContent = "";
 	loadCustom(m).catch((e) => console.error("loadCustom failed:", e));
 	refreshMarker();
@@ -783,7 +1064,9 @@ function refreshMarker() {
 	if (!onViewed) { marker?.remove(); marker = null; return; }
 	const ll = px2ll(lastPos.pixelX, lastPos.pixelY);
 	if (!marker) {
-		marker = L.marker(ll, { icon: L.divIcon({ className: "player-dot", iconSize: [14, 14] }) }).addTo(map);
+		// Inner div (not className on the root): Leaflet owns the root's
+		// transform, so size scaling must live one level down.
+		marker = L.marker(ll, { icon: L.divIcon({ className: "", html: `<div class="player-dot"></div>`, iconSize: [14, 14] }) }).addTo(map);
 	} else {
 		marker.setLatLng(ll);
 	}
@@ -803,23 +1086,38 @@ function handleZone(m) {
 }
 
 // --- WebSocket -------------------------------------------------------------------
+// Status pill tracks TWO links: browser->daemon (WebSocket) AND daemon->bridge
+// (packet capture). It used to show "live" on WebSocket alone, which silently
+// served a stale zone/position whenever the bridge was down (e.g. after
+// restarting the bridges while the map stayed open).
+let wsUp = false, captureUp = false;
+function renderStatus() {
+	const status = document.getElementById("status");
+	if (!wsUp) { status.textContent = "daemon down — retrying"; status.className = "bad"; }
+	else if (!captureUp) { status.textContent = "no packet capture — bridge down? (position may be stale)"; status.className = "warn"; }
+	else { status.textContent = "live"; status.className = "ok"; }
+}
 function connect() {
 	const ws = new WebSocket(`ws://${location.host}`);
-	const status = document.getElementById("status");
-	ws.onopen = () => { status.textContent = "live"; status.className = "ok"; };
+	ws.onopen = () => { wsUp = true; renderStatus(); };
 	ws.onclose = () => {
-		status.textContent = "disconnected — retrying"; status.className = "bad";
+		wsUp = false; renderStatus();
 		setTimeout(connect, 2000);
 	};
 	ws.onmessage = (ev) => {
 		const msg = JSON.parse(ev.data);
 		if (msg.type === "state") {
+			captureUp = !!msg.state.connected;
+			renderStatus();
 			if (msg.state.map) handleZone(msg.state.map);
 			if (msg.state.pos) setPos(msg.state.pos);
 		} else if (msg.type === "zone") {
 			handleZone(msg.map);
 		} else if (msg.type === "pos") {
 			setPos(msg.pos);
+		} else if (msg.type === "connected" || msg.type === "disconnected") {
+			captureUp = msg.type === "connected";
+			renderStatus();
 		}
 	};
 }
