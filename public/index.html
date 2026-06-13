@@ -174,7 +174,7 @@
 	<label><input type="checkbox" id="contentOnly" checked> Only maps with content</label>
 	<label><input type="checkbox" id="followToggle" checked> Follow player</label>
 	<label><input type="checkbox" id="keepZoom" checked> Keep zoom on map switch</label>
-	<div id="coords">X: –  Y: –</div>
+	<div id="coords"><span id="coordsText">X: –  Y: –</span>  <button id="findMe" title="Center the map on your character">📍 Find me</button></div>
 	<div id="nodeCount" class="muted"></div>
 	<div id="etClock" class="muted">ET --:--</div>
 	<details open><summary>Timed nodes (this map)</summary><div id="timedPanel"></div></details>
@@ -1218,8 +1218,19 @@ function setPos(p, rot) {
 	lastPos = p;
 	if (rot !== undefined && rot !== null) lastRot = rot;
 	refreshMarker();
-	document.getElementById("coords").textContent = `X: ${p.mapX.toFixed(1)}  Y: ${p.mapY.toFixed(1)}`;
+	document.getElementById("coordsText").textContent = `X: ${p.mapX.toFixed(1)}  Y: ${p.mapY.toFixed(1)}`;
 }
+
+// "Find me": center+zoom on the player, switching back to their map first if
+// you've browsed elsewhere (the dot itself is unclickable when off-screen).
+document.getElementById("findMe").onclick = async () => {
+	if (!playerMap || !lastPos) return;
+	if (viewedMap?.id !== playerMap.id) {
+		viewMap(playerMap);
+		await new Promise((r) => setTimeout(r, 300));
+	}
+	map.flyTo(px2ll(lastPos.pixelX, lastPos.pixelY), Math.max(map.getZoom(), 2));
+};
 
 function handleZone(m) {
 	playerMap = m;
