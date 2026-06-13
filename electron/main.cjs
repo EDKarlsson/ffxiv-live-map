@@ -65,13 +65,19 @@ async function startStack() {
 
 	// 1. Build bundled data on first run (no-op once cached).
 	const ed = spawnSync(process.execPath, ["scripts/ensure-data.mjs"], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
+	if (ed.error) throw ed.error; // spawn itself failed (binary missing, EACCES, …) — status is null in that case
 	if (ed.status !== 0) throw new Error("data build failed (scripts/ensure-data.mjs).");
 
 	// 2. Deucalion bridge — start ours unless one is already listening. The
 	// script bails if FFXIV/Teamcraft aren't up, so the wait below will time out
 	// with a clear message in that case.
 	if (!(await tcpListening(BRIDGE_PORT))) {
-		bridge = spawn("bash", ["scripts/start-bridge.sh", String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit" });
+		// detached: the bash wrapper respawns `wine` in a loop, so it must be its
+		// own process-group leader. That's the only way killStack() can take the
+		// whole tree (bash + wine) down later via a negative-PID signal — otherwise
+		// the orphaned wine child keeps holding the TCP port. (Not unref'd: we want
+		// to keep tracking it so we can kill it on quit.)
+		bridge = spawn("bash", ["scripts/start-bridge.sh", String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
 		bridge.on("exit", (code) => { console.log(`[app] bridge exited (${code})`); });
 	}
 	if (!(await waitFor(() => tcpListening(BRIDGE_PORT)))) {
@@ -102,20 +108,39 @@ function createWindow() {
 		title: "FFXIV Live Map",
 		backgroundColor: "#15171c",
 		autoHideMenuBar: true,
-		webPreferences: { contextIsolation: true, nodeIntegration: false },
+		// sandbox: defense-in-depth — the renderer only loads our localhost UI
+		// (no preload needs Node), so the OS sandbox costs nothing and shrinks the
+		// blast radius if any loaded page is ever compromised.
+		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
 	});
 	win.loadURL(URL);
-	// Open target="_blank" links (GarlandTools, Teamcraft, wiki) in the real browser.
+	// Deny every in-app popup. The UI's only external links are http(s)
+	// (GarlandTools, Teamcraft, wiki) opened with target="_blank" — hand those to
+	// the real browser and refuse everything else (file:, javascript:, custom
+	// schemes) so a compromised page can't open a window into another protocol.
 	win.webContents.setWindowOpenHandler(({ url }) => {
-		if (/^https?:\/\//.test(url)) { shell.openExternal(url); return { action: "deny" }; }
-		return { action: "allow" };
+		if (/^https?:\/\//.test(url)) shell.openExternal(url);
+		return { action: "deny" };
 	});
 	win.on("closed", () => { win = null; });
 }
 
 function killStack() {
+	// The daemon is a lone node process, so child.kill() reaps it cleanly. The
+	// bridge is a bash wrapper that respawns `wine` in a loop — killing only bash
+	// orphans the wine child, which keeps holding the TCP port. We spawned the
+	// bridge detached (its own process group), so a negative PID signals the whole
+	// group (bash + wine) at once. Windows has neither process groups nor the wine
+	// bridge, so fall back to child.kill() there.
 	for (const child of [daemon, bridge]) {
-		if (child && !child.killed) { try { child.kill(); } catch { /* already gone */ } }
+		if (!child || child.killed) continue;
+		try {
+			if (child === bridge && process.platform !== "win32") {
+				process.kill(-child.pid, "SIGTERM");
+			} else {
+				child.kill();
+			}
+		} catch { /* already gone */ }
 	}
 	daemon = null;
 	bridge = null;

@@ -102,9 +102,15 @@ dot; press **Ctrl+C** to stop the daemon and the bridge together.
 
 `npm run app` runs the whole stack inside an Electron window instead of a
 browser tab — it starts the bridge + daemon for you and opens the map. Run
-`npm install` once first to fetch Electron. A frameless, always-on-top,
-click-through overlay over the game is the next step; for now it's a normal
-resizable window.
+`npm install` once first to fetch Electron.
+
+**Node ≥ 22.12 is required for the desktop app** — that's Electron 42's floor,
+not the daemon's. The browser flow above still runs on Node ≥ 18; only Electron
+needs the newer runtime. Browser-only users on Node 18 can skip Electron
+entirely (and its engine warnings) with `npm install --omit=dev`.
+
+A frameless, always-on-top, click-through overlay over the game is the next
+step; for now it's a normal resizable window.
 
 ### Why a second bridge?
 
