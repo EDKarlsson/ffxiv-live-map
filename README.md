@@ -2,10 +2,30 @@
 
 Standalone live map for FFXIV: a small Node daemon reads your character's
 position from game packets (via Teamcraft's pcap stack) and renders it as a
-moving dot on the correct zone map in your browser. No game files touched, no
-overlay injection — packets in, WebSocket out.
+moving dot on the correct zone map in your browser — together with gathering
+nodes (with Eorzea-time windows), monsters, FATEs, NPCs, fishing holes,
+treasure dig spots, vistas, aether currents, Hunting Log targets, Teamcraft
+list import, and TSP farming routes. No game files touched, no overlay
+injection — packets in, WebSocket out.
 
-**Status: v1 proof-of-concept** — live player dot on the correct zone map.
+## Screenshots
+
+<!-- TODO: drop screenshots into docs/img/ and reference them here.
+     Suggested shots: live dot + node circles; timed-node panel with an
+     active node glowing; a Teamcraft list "To gather" checklist with a
+     farming route; the map browser. -->
+
+## A note on packet capture & ToS
+
+Live position comes from [Deucalion](https://github.com/ff14wed/deucalion),
+the same packet-capture stack FFXIV Teamcraft uses: a DLL reads the game's
+already-decrypted network buffers in-process. Nothing is injected into
+gameplay, nothing is sent to the server, and no game files are modified —
+but like ALL third-party tools (including Teamcraft itself), this sits in
+Square Enix's ToS gray area. Use at your own discretion.
+
+Everything except the live player dot works without packet capture — the
+daemon serves all map layers regardless of whether a bridge is connected.
 
 ## How it works
 
@@ -119,8 +139,15 @@ is required. Flags:
 ### Data attribution
 
 Game/world data is sourced from [FFXIV Teamcraft](https://ffxivteamcraft.com)
-(node/monster/FATE/NPC/map data, MIT-licensed repo) and
-[XIVAPI v2](https://v2.xivapi.com) (map images, icons, Hunting Log). Market and
-mob spawn positions are community-crowdsourced via Teamcraft's mappy system.
-Player position comes from local packet capture (Deucalion) — no game files are
-modified.
+(node/monster/FATE/NPC/map/fishing/treasure data, MIT-licensed repo) and
+[XIVAPI v2](https://v2.xivapi.com) (map images, icons, Hunting Log, vistas,
+aether currents). Node and mob spawn positions are community-crowdsourced via
+Teamcraft's mappy system. Player position comes from local packet capture
+(Deucalion) — no game files are modified.
+
+FINAL FANTASY XIV © SQUARE ENIX CO., LTD. All game content and materials are
+trademarks and copyrights of Square Enix. This is an unaffiliated fan tool.
+
+## License
+
+[MIT](LICENSE)
