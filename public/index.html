@@ -149,6 +149,15 @@
 		border: 3px solid #ffd470; border-radius: 50%;
 		box-shadow: 0 0 8px #ffd470; box-sizing: border-box;
 	}
+	/* Material name(s) a ringed node provides for the imported list. Sits above
+	   the ring; scales with the Map-labels size slider. */
+	.list-node-label {
+		font: 600 calc(11px * var(--sz-maplabel, 1)) system-ui;
+		color: #ffe7ad; text-shadow: 0 0 3px #000, 0 1px 4px #000, 0 0 6px #000;
+		text-align: center; pointer-events: none; line-height: 1.15;
+		position: relative; translate: -50% calc(-22px * var(--sz-maplabel, 1));
+		width: max-content; max-width: 150px;
+	}
 	.route-num {
 		width: 20px; height: 20px; border-radius: 50%; background: #2ecc71; color: #08240f;
 		border: 2px solid #fff; font: 700 11px/18px system-ui; text-align: center; box-shadow: 0 0 4px rgba(0,0,0,.6);
@@ -241,7 +250,7 @@
 		</select>
 		<button id="routePlan">Plan route</button>
 		<button id="routeClear">Clear</button>
-		<div id="routeInfo" class="muted">Best for list runs across separated nodes. Single-material grinding doesn't need a route — one cluster respawns as you circle it.</div>
+		<div id="routeInfo" class="muted">Routes the fewest clusters that cover every material on your list — at most one per material (each respawns as you circle it, so it never sends you to a duplicate cluster).</div>
 	</details>
 	<details><summary>Custom markers</summary>
 		<label><input type="checkbox" id="placeToggle"> Click map to place</label>
@@ -906,12 +915,48 @@ function planRoute() {
 	const src = document.getElementById("routeSource").value;
 	const info = document.getElementById("routeInfo");
 	let pts = [];
+	let listCover = null;
 	if (src === "list") {
 		if (!listData) { info.textContent = "import a Teamcraft list first"; return; }
-		const seen = new Set();
-		for (const it of listData.items) for (const n of it.nodes ?? []) {
-			if (n.map === viewedMap.id && !seen.has(n.node)) { seen.add(n.node); pts.push({ x: n.x, y: n.y }); }
+		// A material's cluster respawns faster than you can deplete it, so you
+		// never need a SECOND cluster of the same material. Pick the fewest
+		// clusters that still cover every needed material (greedy set cover) and
+		// route only those — the path won't include a duplicate stop for a
+		// material you've already collected.
+		const clusters = new Map(); // nodeKey -> { x, y, mats:Set }
+		const needed = new Set();
+		for (const it of listData.items) {
+			if (!it.gatherable) continue;
+			let onMap = false;
+			for (const n of it.nodes ?? []) {
+				if (n.map !== viewedMap.id) continue;
+				onMap = true;
+				const key = n.node ?? `${n.x},${n.y}`;
+				const c = clusters.get(key) ?? { x: n.x, y: n.y, mats: new Set() };
+				c.mats.add(it.id);
+				clusters.set(key, c);
+			}
+			if (onMap) needed.add(it.id);
 		}
+		const pool = [...clusters.values()];
+		const covered = new Set();
+		let from = (playerMap && viewedMap && playerMap.id === viewedMap.id && lastPos)
+			? { x: lastPos.mapX, y: lastPos.mapY } : null;
+		while (covered.size < needed.size && pool.length) {
+			let bi = -1, bGain = 0, bDist = Infinity;
+			pool.forEach((c, i) => {
+				const gain = [...c.mats].filter((m) => !covered.has(m)).length;
+				if (!gain) return;
+				const d = from ? dist(from, c) : 0;
+				if (gain > bGain || (gain === bGain && d < bDist)) { bGain = gain; bDist = d; bi = i; }
+			});
+			if (bi < 0) break;
+			const chosen = pool.splice(bi, 1)[0];
+			chosen.mats.forEach((m) => covered.add(m));
+			pts.push({ x: chosen.x, y: chosen.y });
+			from = chosen;
+		}
+		listCover = { stops: pts.length, mats: needed.size };
 	} else {
 		pts = nodeData.filter((n) => src === "all" ? n.type <= 3 : src === "min" ? n.type <= 1 : (n.type === 2 || n.type === 3))
 			.map((n) => ({ x: n.x, y: n.y }));
@@ -932,7 +977,7 @@ function planRoute() {
 			interactive: false,
 		}));
 	});
-	info.textContent = `${pts.length} stops · ~${Math.round(total)} map-units${start ? " · from you" : ""}`;
+	info.textContent = (listCover ? `${listCover.stops} stop${listCover.stops === 1 ? "" : "s"} cover ${listCover.mats} material${listCover.mats === 1 ? "" : "s"}` : `${pts.length} stops`) + ` · ~${Math.round(total)} map-units${start ? " · from you" : ""}`;
 }
 document.getElementById("routePlan").onclick = planRoute;
 document.getElementById("routeClear").onclick = () => { routeLayer.clearLayers(); document.getElementById("routeInfo").textContent = ""; };
@@ -998,15 +1043,30 @@ function renderList() {
 function highlightListNodes() {
 	listLayer.clearLayers();
 	if (!listData || !viewedMap) return;
+	// Group by node id so a node that yields several of the list's materials
+	// gets ONE ring + one combined label (this also collapses the crystal/shard
+	// nodes that nearly every item shares, instead of stacking dozens of rings).
+	const byNode = new Map();
 	for (const it of listData.items) {
 		if (!it.gatherable) continue;
 		for (const n of it.nodes) {
 			if (n.map !== viewedMap.id) continue;
-			listLayer.addLayer(L.marker(coordLL(n.x, n.y), {
-				icon: L.divIcon({ className: "", html: `<div class="list-node-ring"></div>`, iconSize: [34, 34], iconAnchor: [17, 17] }),
-				interactive: false,
-			}));
+			const key = n.node ?? `${n.x},${n.y}`;
+			const e = byNode.get(key) ?? { x: n.x, y: n.y, names: new Set() };
+			e.names.add(it.name);
+			byNode.set(key, e);
 		}
+	}
+	for (const { x, y, names } of byNode.values()) {
+		const ll = coordLL(x, y);
+		listLayer.addLayer(L.marker(ll, {
+			icon: L.divIcon({ className: "", html: `<div class="list-node-ring"></div>`, iconSize: [34, 34], iconAnchor: [17, 17] }),
+			interactive: false,
+		}));
+		listLayer.addLayer(L.marker(ll, {
+			icon: L.divIcon({ className: "", html: `<div class="list-node-label">${[...names].join("<br>")}</div>`, iconSize: null }),
+			interactive: false,
+		}));
 	}
 }
 
