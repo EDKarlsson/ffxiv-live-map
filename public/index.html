@@ -76,6 +76,8 @@
 		background: #2e86c1; border: 2px solid #d6eaf8;
 		scale: var(--sz-npc, 1);
 	}
+	.npc-dot.quest { background: #e8c36a; border-color: #fff3d6; }   /* quest giver */
+	.npc-dot.vendor { background: #58b368; border-color: #d9f2dd; }  /* sells things */
 	#huntList { max-height: 40vh; overflow-y: auto; font-size: 12px; }
 	#huntList .rank { color: #e8c36a; font-weight: 600; margin-top: 4px; }
 	#huntList .htgt { cursor: pointer; padding: 1px 0 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -175,6 +177,10 @@
 	</details>
 	<details><summary>NPCs</summary>
 		<input type="text" id="npcSearch" placeholder="search NPCs…">
+		<div>
+			<label><input type="checkbox" id="npcQuest"> Quest givers</label>
+			<label><input type="checkbox" id="npcVendor"> Vendors</label>
+		</div>
 		<div id="npcInfo" class="muted"></div>
 	</details>
 	<details><summary>Find material</summary>
@@ -460,27 +466,51 @@ async function loadFates(m) {
 	}
 }
 
-// --- NPCs (search-driven: 23k total, render only matches) -------------------------
+// --- NPCs (search-driven: 23k total, render only matches; role toggles) -----------
 let npcData = [];
+const npcRoleLayer = L.layerGroup().addTo(map);
+
+function npcMarker(n, cls = "") {
+	return L.marker(coordLL(n.x, n.y), {
+		icon: L.divIcon({ className: "", html: `<div class="npc-dot ${cls}"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }),
+	}).bindTooltip(`${n.name}${n.title ? ` — ${n.title}` : ""}`)
+		.bindPopup(`<b>${n.name}</b>${n.title ? ` <span class="nlvl">${n.title}</span>` : ""}<br>` +
+			`<span class="nlvl">(${n.x}, ${n.y})${n.role ? ` · ${n.role.includes("q") ? "quest giver " : ""}${n.role.includes("s") ? "vendor" : ""}` : ""}</span><br>` +
+			`<a href="https://ffxivteamcraft.com/db/en/npc/${n.id}" target="_blank">Teamcraft DB</a>`);
+}
+
 function renderNpcs() {
 	layers.npcs.clearLayers();
 	const q = document.getElementById("npcSearch").value.trim().toLowerCase();
 	const info = document.getElementById("npcInfo");
 	if (q.length < 2) { info.textContent = `${npcData.length} NPCs on this map — type 2+ chars`; return; }
 	const hits = npcData.filter((n) => n.name.toLowerCase().includes(q) || n.title.toLowerCase().includes(q));
-	for (const n of hits.slice(0, 100)) {
-		layers.npcs.addLayer(L.marker(coordLL(n.x, n.y), {
-			icon: L.divIcon({ className: "", html: `<div class="npc-dot"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }),
-		}).bindTooltip(`${n.name}${n.title ? ` — ${n.title}` : ""}`)
-			.bindPopup(`<b>${n.name}</b>${n.title ? ` <span class="nlvl">${n.title}</span>` : ""}<br><span class="nlvl">(${n.x}, ${n.y})</span><br><a href="https://ffxivteamcraft.com/db/en/npc/${n.id}" target="_blank">Teamcraft DB</a>`));
-	}
+	for (const n of hits.slice(0, 100)) layers.npcs.addLayer(npcMarker(n));
 	info.textContent = `${hits.length} match${hits.length === 1 ? "" : "es"}${hits.length > 100 ? " (showing 100)" : ""}`;
 	if (hits.length === 1) map.flyTo(coordLL(hits[0].x, hits[0].y), 1);
 }
+
+// Role toggles: gold = quest giver, green = vendor (an NPC with both shows
+// as quest giver — gold wins; the popup lists both roles).
+function renderNpcRoles() {
+	npcRoleLayer.clearLayers();
+	const wantQ = document.getElementById("npcQuest").checked;
+	const wantS = document.getElementById("npcVendor").checked;
+	if (!wantQ && !wantS) return;
+	for (const n of npcData) {
+		if (!n.role) continue;
+		const isQ = n.role.includes("q"), isS = n.role.includes("s");
+		if ((isQ && wantQ) || (isS && wantS)) npcRoleLayer.addLayer(npcMarker(n, isQ ? "quest" : "vendor"));
+	}
+}
+document.getElementById("npcQuest").onchange = renderNpcRoles;
+document.getElementById("npcVendor").onchange = renderNpcRoles;
+
 async function loadNpcs(m) {
 	layers.npcs.clearLayers();
 	npcData = await fetch(`/npcs?map=${m.id}`).then((r) => r.json());
 	renderNpcs();
+	renderNpcRoles();
 }
 document.getElementById("npcSearch").oninput = renderNpcs;
 

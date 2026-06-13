@@ -33,7 +33,7 @@ const readData = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf-8"));
 
 let nodeDb, itemNames, monsterDb, mobNames, mapsIndex, fateDb, npcDb,
 	huntingLog, mobMaps, itemNodes, allItemNames, treasureDb, fishingDb,
-	vistaDb, aetherDb;
+	vistaDb, aetherDb, npcRoles;
 
 // Newer layer files may not exist yet on a data/ built by an older checkout —
 // serve empty rather than crashing, so `npm run rebuild-data` can catch up.
@@ -57,6 +57,7 @@ function loadData() {
 	fishingDb = readDataOptional("fishing-spots.json");
 	vistaDb = readDataOptional("vistas.json");
 	aetherDb = readDataOptional("aether-currents.json");
+	npcRoles = readDataOptional("npc-roles.json"); // { npcId: "q"|"s"|"qs" }
 }
 loadData();
 
@@ -195,10 +196,18 @@ const server = createServer(async (req, res) => {
 		res.end(JSON.stringify(list));
 		return;
 	}
-	if (req.url.startsWith("/fates") || req.url.startsWith("/npcs") || req.url.startsWith("/vistas")) {
+	if (req.url.startsWith("/fates") || req.url.startsWith("/vistas")) {
 		const u = new URL(req.url, "http://localhost");
-		const db = req.url.startsWith("/fates") ? fateDb : req.url.startsWith("/npcs") ? npcDb : vistaDb;
+		const db = req.url.startsWith("/fates") ? fateDb : vistaDb;
 		const list = db[String(Number(u.searchParams.get("map")))] ?? [];
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/npcs")) {
+		// Attach roles ("q" quest giver / "s" shop / "qs" both) for UI toggles.
+		const mapId = String(Number(new URL(req.url, "http://localhost").searchParams.get("map")));
+		const list = (npcDb[mapId] ?? []).map((n) => npcRoles[n.id] ? { ...n, role: npcRoles[n.id] } : n);
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
 		return;

@@ -19,7 +19,7 @@ const force = process.argv.includes("--force");
 // Sentinels — one per build script. If any is missing, (re)build everything.
 // treasures.json covers the build-node-data additions (treasure + fishing);
 // vistas.json covers build-extra-layers (vistas + aether currents).
-const needed = ["nodes.json", "maps.json", "hunting-log.json", "treasures.json", "vistas.json"];
+const needed = ["nodes.json", "maps.json", "hunting-log.json", "treasures.json", "vistas.json", "npc-roles.json"];
 const missing = needed.filter((f) => !existsSync(join(DATA, f)));
 
 if (!force && missing.length === 0) {

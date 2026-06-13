@@ -26,9 +26,14 @@
  * src/coords.mjs, with offsets/size_factor from Teamcraft's maps.json
  * (fetched via tc-data-source so this script is standalone).
  *
+ * NPC roles — vendors are the keys of Teamcraft's shops-by-npc.json; quest
+ * givers are the distinct Quest.IssuerStart ENpcResident ids (XIVAPI v2).
+ * Both use the same 1xxxxxx ENpc id space as npcs.json.
+ *
  * Output:
  *   data/vistas.json          { mapId: [{name, place, x, y, minTime, maxTime, emote}] }
  *   data/aether-currents.json { mapId: { fields: [{x, y}], quests: [name] } }
+ *   data/npc-roles.json       { npcId: "q" | "s" | "qs" }  (quest giver / shop)
  *
  * Usage: node scripts/build-extra-layers.mjs
  */
@@ -162,3 +167,17 @@ for (const row of acRows) {
 
 writeFileSync(join(__dirname, "../data/aether-currents.json"), JSON.stringify(currentsByMap));
 console.log(`aether currents: ${fieldCount} field + ${questCount} quest on ${Object.keys(currentsByMap).length} maps`);
+
+// --- NPC roles --------------------------------------------------------------------
+const shopsByNpc = await loadTcJson("shops-by-npc.json");
+const questRows = await sheetAll("Quest", "IssuerStart.row_id");
+const givers = new Set();
+for (const row of questRows) {
+	const id = row.fields.IssuerStart?.row_id;
+	if (id) givers.add(id);
+}
+const roles = {};
+for (const id of givers) roles[id] = "q";
+for (const id of Object.keys(shopsByNpc)) roles[id] = roles[id] ? "qs" : "s";
+writeFileSync(join(__dirname, "../data/npc-roles.json"), JSON.stringify(roles));
+console.log(`npc roles: ${givers.size} quest givers, ${Object.keys(shopsByNpc).length} vendors, ${Object.keys(roles).length} total`);
