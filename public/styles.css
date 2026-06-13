@@ -1,0 +1,175 @@
+:root { color-scheme: dark; }
+html, body { margin: 0; height: 100%; background: #15171c; color: #e6e6e6; font-family: system-ui, sans-serif; }
+#map { height: 100%; background: #15171c; }
+#hud {
+	position: absolute; top: 10px; right: 10px; z-index: 1000;
+	background: rgba(20, 22, 28, 0.9); border: 1px solid #333; border-radius: 8px;
+	padding: 10px 14px; font-size: 13px; line-height: 1.5; width: 250px;
+	max-height: calc(100vh - 40px); overflow-y: auto;
+}
+#hud .zone { font-weight: 600; }
+#hud .muted { color: #9aa0aa; }
+#hud select { width: 100%; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px; margin: 4px 0; }
+#hud input[type="text"] { width: 100%; box-sizing: border-box; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px 6px; margin: 4px 0; }
+#hud label { cursor: pointer; }
+#hud details { margin-top: 6px; border-top: 1px solid #333; padding-top: 6px; }
+#hud summary { cursor: pointer; font-weight: 600; }
+#status { position: absolute; bottom: 10px; left: 10px; z-index: 1000; font-size: 12px;
+	padding: 4px 10px; border-radius: 6px; background: rgba(20,22,28,.85); border: 1px solid #333; }
+#status.ok { color: #7fd17f; } #status.bad { color: #e07a7a; } #status.warn { color: #e8c36a; }
+/* Icon sizing: every category scales via a --sz-* CSS variable set from the
+   "Icon sizes" panel (live, no marker rebuild). Inner elements are scaled —
+   never the Leaflet marker root, whose transform Leaflet owns. The `translate`
+   and `scale` properties are used (not `transform`) so the node-spin
+   animation's transform doesn't clobber them. */
+.player-dot {
+	width: calc(14px * var(--sz-player, 1)); height: calc(14px * var(--sz-player, 1)); border-radius: 50%;
+	background: #4da3ff; border: 2px solid #fff; box-shadow: 0 0 8px #4da3ff;
+	position: relative; left: 50%; top: 50%; translate: -50% -50%;
+	/* JS sets `rotate:` from packet rotation (Teamcraft mappy formula:
+	   (rotation − π) × −1). The `rotate` property composes with `translate`
+	   without fighting Leaflet's transform on the marker root. */
+}
+.player-dot::after { /* heading arrow, points up at rotate:0 */
+	content: ""; position: absolute; left: 50%; top: -9px; translate: -50% 0;
+	border-left: 4px solid transparent; border-right: 4px solid transparent;
+	border-bottom: 8px solid #fff;
+	filter: drop-shadow(0 0 2px rgba(0,0,0,.6));
+}
+.node-icon img {
+	--sz: var(--sz-node, 1);
+	width: calc(26px * var(--sz)); height: calc(26px * var(--sz));
+	filter: drop-shadow(0 0 3px rgba(0,0,0,.8));
+	position: relative; left: 50%; top: 50%; translate: -50% -50%;
+}
+.fate-icon img { --sz: var(--sz-fate, 1); }
+.fish-icon img { --sz: var(--sz-fish, 1); }
+.poi-icon img { --sz: var(--sz-poi, 1); }
+.treasure-icon img { --sz: var(--sz-tre, 1); }
+.npc-role-icon img { --sz: var(--sz-npc, 1); }
+.vista-icon img {
+	--sz: var(--sz-vista, 1);
+	border-radius: 50%; border: 2px solid #e8c36a; box-sizing: border-box;
+	box-shadow: 0 0 4px rgba(0,0,0,.7);
+}
+.vista-photo { border-radius: 6px; margin-top: 4px; max-width: 160px; display: block; }
+/* In-game-style place labels. pre-line: PlaceNameSubtext uses \n for the
+   "(Guild)" second line. Inner div self-centers so iconSize can be null. */
+.map-label {
+	font: 600 calc(13px * var(--sz-maplabel, 1)) system-ui;
+	color: #fff; text-shadow: 0 0 3px #000, 0 1px 4px #000, 0 0 6px #000;
+	white-space: pre-line; text-align: center; pointer-events: none;
+	position: relative; translate: -50% -50%; width: max-content; max-width: 180px;
+}
+.map-label.zlink { color: #ffd470; pointer-events: auto; cursor: pointer; }
+.map-label.zlink:hover { color: #ffe7ad; }
+/* Active (up-now) timed node: spinning icon + pulsing glow behind it. */
+.node-icon.node-up { overflow: visible; }
+.node-icon.node-up img {
+	filter: drop-shadow(0 0 5px #ffd470);
+	animation: node-spin 4s linear infinite;
+	position: relative; z-index: 1;
+}
+.node-icon.node-up::before {
+	content: ""; position: absolute; inset: -8px; border-radius: 50%;
+	background: radial-gradient(circle, rgba(255,212,112,.9) 0%, rgba(255,212,112,.35) 45%, transparent 70%);
+	animation: node-glow 1.6s ease-in-out infinite; z-index: 0; pointer-events: none;
+}
+@keyframes node-spin { to { transform: rotate(360deg); } }
+@keyframes node-glow {
+	0%, 100% { opacity: .35; transform: scale(.85); }
+	50% { opacity: .85; transform: scale(1.35); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.node-icon.node-up img { animation: none; }
+	.node-icon.node-up::before { animation: none; opacity: .6; }
+}
+.mob-dot {
+	min-width: 14px; height: 14px; border-radius: 8px; padding: 0 3px; box-sizing: border-box;
+	background: #c0392b; border: 1px solid #f0b1a8; color: #fff;
+	font: 700 10px/12px system-ui; text-align: center;
+	scale: var(--sz-mob, 1);
+}
+.mob-dot.fate { background: #8e44ad; }
+.npc-dot {
+	width: 12px; height: 12px; border-radius: 50%;
+	background: #2e86c1; border: 2px solid #d6eaf8;
+	scale: var(--sz-npc, 1);
+}
+.npc-dot.quest { background: #e8c36a; border-color: #fff3d6; }   /* quest giver */
+.npc-dot.vendor { background: #58b368; border-color: #d9f2dd; }  /* sells things */
+#huntList { max-height: 40vh; overflow-y: auto; font-size: 12px; }
+#huntList .rank { color: #e8c36a; font-weight: 600; margin-top: 4px; }
+#huntList .htgt { cursor: pointer; padding: 1px 0 1px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#huntList .htgt:hover { color: #fff; }
+#huntList .hcount { color: #9aa0aa; }
+.custom-pin { font-size: calc(22px * var(--sz-cust, 1)); line-height: 22px; text-align: center; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
+.emoji-pin { --sz: 1; font-size: calc(18px * var(--sz)); line-height: 18px; text-align: center; filter: drop-shadow(0 0 2px rgba(0,0,0,.9)); }
+.vista-pin { --sz: var(--sz-vista, 1); }
+.current-pin { --sz: var(--sz-cur, 1); }
+.treasure-pin { --sz: var(--sz-tre, 1); }
+#sizePanel { font-size: 12px; }
+#sizePanel .srow { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+#sizePanel label { flex: 0 0 110px; margin: 0; }
+#sizePanel input[type=range] { flex: 1; min-width: 60px; }
+#sizePanel .sval { flex: 0 0 32px; color: #9aa0aa; text-align: right; }
+#matList { max-height: 30vh; overflow-y: auto; font-size: 12px; }
+#matList .mat { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#matList .mat:hover { color: #fff; }
+#matList .mq { color: #9aa0aa; font-size: 11px; }
+#treasureList { max-height: 30vh; overflow-y: auto; font-size: 12px; }
+#treasureList .lvl { color: #9aa0aa; font-size: 11px; }
+#aetherInfo { font-size: 12px; }
+#aetherInfo .aq { color: #9aa0aa; padding-left: 8px; }
+.leaflet-popup-content .vista-open { color: #8fd98f; }
+.leaflet-popup-content .vista-closed { color: #9aa0aa; }
+.placing { cursor: crosshair; }
+#iconPalette { margin: 4px 0; }
+#iconPalette span {
+	display: inline-block; font-size: 18px; padding: 2px 4px; cursor: pointer;
+	border: 1px solid transparent; border-radius: 4px;
+}
+#iconPalette span.sel { border-color: #6db3ff; background: #23262e; }
+#hud button { background: #2e4a6e; color: #fff; border: 1px solid #4a6a92; border-radius: 4px; padding: 3px 10px; cursor: pointer; }
+#hud button:hover { background: #3a5d88; }
+#listItems { max-height: 35vh; overflow-y: auto; font-size: 12px; }
+#listItems .lrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#listItems .lrow:hover { color: #fff; }
+#listItems .lrow.nogather { color: #777; cursor: default; }
+#listItems .lq { color: #9aa0aa; }
+.list-node-ring {
+	border: 3px solid #ffd470; border-radius: 50%;
+	box-shadow: 0 0 8px #ffd470; box-sizing: border-box;
+}
+/* Material name(s) a ringed node provides for the imported list. Sits above
+   the ring; scales with the Map-labels size slider. */
+.list-node-label {
+	font: 600 calc(11px * var(--sz-maplabel, 1)) system-ui;
+	color: #ffe7ad; text-shadow: 0 0 3px #000, 0 1px 4px #000, 0 0 6px #000;
+	text-align: center; pointer-events: none; line-height: 1.15;
+	position: relative; translate: -50% calc(-22px * var(--sz-maplabel, 1));
+	width: max-content; max-width: 150px;
+}
+.route-num {
+	width: 20px; height: 20px; border-radius: 50%; background: #2ecc71; color: #08240f;
+	border: 2px solid #fff; font: 700 11px/18px system-ui; text-align: center; box-shadow: 0 0 4px rgba(0,0,0,.6);
+}
+#timedPanel { max-height: 30vh; overflow-y: auto; }
+#timedPanel .trow, #mobList .mrow { cursor: pointer; padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#timedPanel .trow:hover, #mobList .mrow:hover { color: #fff; }
+#timedPanel .up, #upList .up { color: #8fd98f; }
+#timedPanel .down, #upList .down { color: #9aa0aa; }
+#upList { max-height: 38vh; overflow-y: auto; font-size: 12px; }
+#upList .uprow { cursor: pointer; padding: 2px 0; border-bottom: 1px solid #262932; }
+#upList .uprow:hover { color: #fff; }
+#upList .upzone { color: #9aa0aa; font-size: 11px; }
+#hud label { display: inline-block; margin-right: 6px; }
+#mobList { max-height: 35vh; overflow-y: auto; }
+#mobList .lvl { color: #9aa0aa; font-size: 11px; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip {
+	background: #1d2026; color: #e6e6e6; border: 1px solid #333;
+}
+.leaflet-popup-content a { color: #6db3ff; text-decoration: none; }
+.leaflet-popup-content .nlvl { color: #9aa0aa; font-size: 11px; }
+.leaflet-popup-content .timed { color: #e8c36a; font-size: 11px; }
+.leaflet-container { background: #15171c; }
