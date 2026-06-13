@@ -102,13 +102,14 @@ See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
    screenshots in README, confirm no personal data in repo (checked: none —
    character/list IDs live only in the guide project). Be upfront that live
    position uses Deucalion packet capture (same ToS-gray area as Teamcraft).
-4. **NPC role toggles** — quest givers, vendors, and other special-interaction
-   NPCs as toggleable categories (like the in-game map's icons). Likely
-   sources: TC `shops-by-npc.json`/`quests.json` joins, or the ENpc data.
-5. **Electron (or similar) packaging research** — distributable installable
-   releases so users don't need Node/npm. Compare: Electron (what Teamcraft
-   uses, heavy), Tauri (small, Rust), or pkg/single-executable Node. Must
-   bundle the data build or ship pre-built data.
-6. **Mini-map overlay mode** — compact always-on-top window with transparency
-   to float over the game. Browser can't do always-on-top → ties into the
-   packaging item above (Electron/Tauri frameless transparent window).
+4. ~~NPC role toggles~~ — DONE 2026-06-12 (quest givers from Quest.IssuerStart,
+   vendors from shops-by-npc; gold/green dots). Future refinement: more
+   "special interaction" categories (inn keepers, aetheryte tickers are EObjs).
+5. **Packaging — researched, path decided** (docs/packaging-research.md):
+   single-binary Node (core SEA or @yao-pkg/pkg) + GitHub Releases + Homebrew
+   tap for installable releases now; Electron later for the overlay (its main
+   process IS Node — daemon runs unmodified; Teamcraft precedent).
+6. **Mini-map overlay mode** — compact always-on-top transparent window over
+   the game. Per the research: Electron BrowserWindow {transparent, frame:
+   false, alwaysOnTop} + setIgnoreMouseEvents; works over fullscreen-windowed
+   FFXIV. Tauri rejected (macOS transparency = private API + open bugs).
