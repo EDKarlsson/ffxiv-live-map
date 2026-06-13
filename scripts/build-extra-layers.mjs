@@ -95,7 +95,7 @@ async function searchAll(sheet, query, fields) {
 // --- Vistas -------------------------------------------------------------------
 const adventures = await sheetAll(
 	"Adventure",
-	"Name,PlaceName.Name,Emote.Name,MinTime,MaxTime,Level.X,Level.Z,Level.Map.row_id"
+	"Name,PlaceName.Name,Emote.Name,MinTime,MaxTime,Level.X,Level.Z,Level.Map.row_id,IconList"
 );
 
 const vistasByMap = {};
@@ -116,6 +116,8 @@ for (const row of adventures) {
 		minTime: f.MinTime ?? 0,
 		maxTime: f.MaxTime ?? 0,
 		emote: f.Emote?.fields?.Name ?? "",
+		// Per-vista 40x40 photo thumbnail (IconList) — used as the marker.
+		icon: f.IconList?.id ?? 0,
 	});
 	vistaCount++;
 }

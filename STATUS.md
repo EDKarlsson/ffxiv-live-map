@@ -125,6 +125,9 @@ See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
    DataType 0 plain / 1 map link (DataKey = target map) / 3 aetheryte /
    4 aethernet; `rows=` param only returns subrow 0 — walk with
    `after=row:subrow` cursor.
-8. **Real icons for the remaining dots** — npc/mob dots and the emoji pins
-   (vista 🔭, current 🌀, treasure ❌) could also use game icons now that
-   iconAsset() handles any icon folder. POIs already use real icons.
+8. ~~Real icons for the remaining markers~~ — DONE 2026-06-12: vistas use
+   their own photo thumbnail (Adventure.IconList, gold-ringed + shown in the
+   popup), treasure uses the timeworn-map item icon (025930), quest givers
+   use the quest "!" (071341), vendors use the Shop icon (060412). Still on
+   emoji: aether-current 🌀 (no dedicated map icon) and the mob count dots
+   (the number IS the info). mob/npc-search dots intentionally left as dots.

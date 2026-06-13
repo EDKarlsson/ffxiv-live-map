@@ -53,6 +53,14 @@
 	.fate-icon img { --sz: var(--sz-fate, 1); }
 	.fish-icon img { --sz: var(--sz-fish, 1); }
 	.poi-icon img { --sz: var(--sz-poi, 1); }
+	.treasure-icon img { --sz: var(--sz-tre, 1); }
+	.npc-role-icon img { --sz: var(--sz-npc, 1); }
+	.vista-icon img {
+		--sz: var(--sz-vista, 1);
+		border-radius: 50%; border: 2px solid #e8c36a; box-sizing: border-box;
+		box-shadow: 0 0 4px rgba(0,0,0,.7);
+	}
+	.vista-photo { border-radius: 6px; margin-top: 4px; max-width: 160px; display: block; }
 	/* In-game-style place labels. pre-line: PlaceNameSubtext uses \n for the
 	   "(Guild)" second line. Inner div self-centers so iconSize can be null. */
 	.map-label {
@@ -509,9 +517,16 @@ function npcMarker(n, cls = "") {
 	// through fine, e.g. N'nmulika — verified 2026-06-12). Not every generic
 	// NPC has a page, but quest givers/vendors essentially always do.
 	const wiki = `https://ffxiv.consolegameswiki.com/wiki/${encodeURIComponent(n.name.replace(/ /g, "_"))}`;
-	return L.marker(coordLL(n.x, n.y), {
-		icon: L.divIcon({ className: "", html: `<div class="npc-dot ${cls}"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }),
-	}).bindTooltip(`${n.name}${n.title ? ` — ${n.title}` : ""}`)
+	// Role markers use real game icons: 071341 = quest "!" (viewed/verified
+	// 2026-06-12), 060412 = Shop (named by the MapSymbol sheet). Search hits
+	// keep the plain blue dot.
+	const icon = cls === "quest"
+		? L.divIcon({ className: "node-icon npc-role-icon", html: `<img src="${iconAsset(71341)}">`, iconSize: [22, 22], iconAnchor: [11, 11] })
+		: cls === "vendor"
+			? L.divIcon({ className: "node-icon npc-role-icon", html: `<img src="${iconAsset(60412)}">`, iconSize: [22, 22], iconAnchor: [11, 11] })
+			: L.divIcon({ className: "", html: `<div class="npc-dot"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] });
+	return L.marker(coordLL(n.x, n.y), { icon })
+		.bindTooltip(`${n.name}${n.title ? ` — ${n.title}` : ""}`)
 		.bindPopup(`<b>${n.name}</b>${n.title ? ` <span class="nlvl">${n.title}</span>` : ""}<br>` +
 			`<span class="nlvl">(${n.x}, ${n.y})${n.role ? ` · ${n.role.includes("q") ? "quest giver " : ""}${n.role.includes("s") ? "vendor" : ""}` : ""}</span><br>` +
 			`<a href="${wiki}" target="_blank">Wiki</a> · ` +
@@ -632,7 +647,9 @@ function showTier(item) {
 	const g = L.layerGroup().addTo(map);
 	for (const t of treasureData.filter((x) => x.item === item)) {
 		g.addLayer(L.marker(coordLL(t.x, t.y), {
-			icon: L.divIcon({ className: "", html: `<div class="emoji-pin treasure-pin">❌</div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
+			// 025930 = the shared timeworn-map item icon (all tiers use it; from
+			// TC item-icons.json, verified 2026-06-12).
+			icon: L.divIcon({ className: "node-icon treasure-icon", html: `<img src="${iconAsset(25930)}">`, iconSize: [24, 24], iconAnchor: [12, 12] }),
 		}).bindTooltip(`${t.itemName}${t.party > 1 ? ` (party of ${t.party})` : ""}`)
 			.bindPopup(`<b>${t.itemName}</b> <span class="nlvl">dig spot · (${t.x}, ${t.y})${t.party > 1 ? ` · ${t.party}-player` : ""}</span><br>` +
 				`<a href="https://www.garlandtools.org/db/#item/${t.item}" target="_blank">GarlandTools</a>`));
@@ -726,15 +743,20 @@ async function loadVistas(m) {
 	layers.vistas.clearLayers();
 	const vistas = await fetch(`/vistas?map=${m.id}`).then((r) => r.json());
 	for (const v of vistas) {
-		layers.vistas.addLayer(L.marker(coordLL(v.x, v.y), {
-			icon: L.divIcon({ className: "", html: `<div class="emoji-pin vista-pin">🔭</div>`, iconSize: [18, 18], iconAnchor: [9, 9] }),
-		}).bindTooltip(`Vista: ${v.name}`)
+		// Marker = the vista's own 40x40 photo thumbnail (Adventure.IconList),
+		// gold-ringed; falls back to the 🔭 pin for rows without one.
+		const icon = v.icon
+			? L.divIcon({ className: "node-icon vista-icon", html: `<img src="${iconAsset(v.icon)}">`, iconSize: [26, 26], iconAnchor: [13, 13] })
+			: L.divIcon({ className: "", html: `<div class="emoji-pin vista-pin">🔭</div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+		layers.vistas.addLayer(L.marker(coordLL(v.x, v.y), { icon })
+			.bindTooltip(`Vista: ${v.name}`)
 			.bindPopup(() => {
 				const win = vistaAlways(v) ? "any time"
 					: `ET ${fmtVT(v.minTime)}–${fmtVT(v.maxTime)} <span class="${vistaOpen(v) ? "vista-open" : "vista-closed"}">${vistaOpen(v) ? "● open now" : "○ closed"}</span>`;
 				return `<b>${v.name}</b> <span class="nlvl">vista · ${v.place} · (${v.x}, ${v.y})</span><br>` +
 					`${win}${v.emote ? ` · /${v.emote.toLowerCase()}` : ""}<br>` +
-					`<span class="nlvl">Some vistas also need specific weather (not in game data — check the wiki)</span>`;
+					`<span class="nlvl">Some vistas also need specific weather (not in game data — check the wiki)</span>` +
+					(v.icon ? `<img class="vista-photo" src="${iconAsset(v.icon)}">` : "");
 			}));
 	}
 }
