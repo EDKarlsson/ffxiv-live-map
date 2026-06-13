@@ -1161,12 +1161,14 @@ keepZoomBox.onchange = () => localStorage.setItem("keepZoom", keepZoomBox.checke
 
 function viewMap(m) {
 	if (!m || viewedMap?.id === m.id) { refreshMarker(); return; }
-	const prevZoom = viewedMap ? map.getZoom() : null;
+	const hadMap = viewedMap !== null;
 	viewedMap = m;
 	if (overlay) { overlay.remove(); overlay = null; }
 	overlay = L.imageOverlay(m.image, bounds, { pane: "basemap" }).addTo(map);
-	map.fitBounds(bounds);
-	if (keepZoomBox.checked && prevZoom !== null) map.setZoom(prevZoom, { animate: false });
+	// All map images share the same 2048 bounds, so "keep zoom" = simply don't
+	// re-fit: center and zoom carry over. (setZoom after fitBounds doesn't
+	// work — the fit animation overrides it.)
+	if (!hadMap || !keepZoomBox.checked) map.fitBounds(bounds);
 	applyPickerSelection(m);
 	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
 	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
@@ -1202,7 +1204,10 @@ function refreshMarker() {
 	if (!marker) {
 		// Inner div (not className on the root): Leaflet owns the root's
 		// transform, so size scaling/rotation must live one level down.
-		marker = L.marker(ll, { icon: L.divIcon({ className: "", html: `<div class="player-dot"></div>`, iconSize: [14, 14] }) }).addTo(map);
+		marker = L.marker(ll, { icon: L.divIcon({ className: "", html: `<div class="player-dot"></div>`, iconSize: [14, 14] }) })
+			.bindTooltip("You — click to zoom in")
+			.on("click", () => map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 2)))
+			.addTo(map);
 	} else {
 		marker.setLatLng(ll);
 	}
