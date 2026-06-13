@@ -32,7 +32,14 @@ const DATA_DIR = join(__dirname, "../data");
 const readData = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf-8"));
 
 let nodeDb, itemNames, monsterDb, mobNames, mapsIndex, fateDb, npcDb,
-	huntingLog, mobMaps, itemNodes, allItemNames;
+	huntingLog, mobMaps, itemNodes, allItemNames, treasureDb, fishingDb,
+	vistaDb, aetherDb;
+
+// Newer layer files may not exist yet on a data/ built by an older checkout —
+// serve empty rather than crashing, so `npm run rebuild-data` can catch up.
+const readDataOptional = (f) => {
+	try { return readData(f); } catch { console.warn(`[data] ${f} missing — run npm run rebuild-data`); return {}; }
+};
 
 function loadData() {
 	nodeDb = readData("nodes.json");
@@ -46,6 +53,10 @@ function loadData() {
 	mobMaps = readData("mob-maps.json");
 	itemNodes = readData("item-nodes.json");
 	allItemNames = readData("item-names-all.json");
+	treasureDb = readDataOptional("treasures.json");
+	fishingDb = readDataOptional("fishing-spots.json");
+	vistaDb = readDataOptional("vistas.json");
+	aetherDb = readDataOptional("aether-currents.json");
 }
 loadData();
 
@@ -184,12 +195,39 @@ const server = createServer(async (req, res) => {
 		res.end(JSON.stringify(list));
 		return;
 	}
-	if (req.url.startsWith("/fates") || req.url.startsWith("/npcs")) {
+	if (req.url.startsWith("/fates") || req.url.startsWith("/npcs") || req.url.startsWith("/vistas")) {
 		const u = new URL(req.url, "http://localhost");
-		const db = req.url.startsWith("/fates") ? fateDb : npcDb;
+		const db = req.url.startsWith("/fates") ? fateDb : req.url.startsWith("/npcs") ? npcDb : vistaDb;
 		const list = db[String(Number(u.searchParams.get("map")))] ?? [];
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/treasures")) {
+		// Attach the timeworn-map tier name so the UI can group/filter by it.
+		const mapId = String(Number(new URL(req.url, "http://localhost").searchParams.get("map")));
+		const list = (treasureDb[mapId] ?? []).map((t) => ({
+			...t,
+			itemName: itemNames[t.item] ?? allItemNames[t.item] ?? `#${t.item}`,
+		}));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/fishing-spots")) {
+		const mapId = String(Number(new URL(req.url, "http://localhost").searchParams.get("map")));
+		const list = (fishingDb[mapId] ?? []).map((s) => ({
+			...s,
+			fishes: s.fishes.map((f) => ({ id: f, name: itemNames[f] ?? allItemNames[f] ?? `#${f}` })),
+		}));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/aether-currents")) {
+		const mapId = String(Number(new URL(req.url, "http://localhost").searchParams.get("map")));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(aetherDb[mapId] ?? { fields: [], quests: [] }));
 		return;
 	}
 	if (req.url.startsWith("/custom")) {
@@ -231,8 +269,11 @@ const server = createServer(async (req, res) => {
 			if (doc.error) { res.writeHead(404); res.end(JSON.stringify({ error: doc.error.message })); return; }
 			const fields = doc.fields ?? {};
 			const listName = fields.name?.stringValue ?? listId;
-			const finals = fields.finalItems?.arrayValue?.values ?? [];
-			const items = finals.map((v) => {
+			// A list doc has TWO arrays: `finalItems` (the outputs, e.g. gear) and
+			// `items` (Teamcraft's precomputed full ingredient breakdown — raw mats
+			// incl. crystals, with amounts). Gear lists have no gatherable finals,
+			// so the gather checklist/routes must come from `items`.
+			const decode = (arr) => (arr ?? []).map((v) => {
 				const f = v.mapValue.fields;
 				const id = Number(f.id?.integerValue ?? 0);
 				const amount = Number(f.amount?.integerValue ?? 0);
@@ -241,12 +282,38 @@ const server = createServer(async (req, res) => {
 				const maps = [...new Set(nodes.map((n) => n.map))];
 				return { id, name: allItemNames[id] ?? itemNames[id] ?? `#${id}`, amount, done, gatherable: nodes.length > 0, maps, nodes };
 			});
+			const finals = decode(fields.finalItems?.arrayValue?.values);
+			const items = decode(fields.items?.arrayValue?.values);
 			res.writeHead(200, { "Content-Type": "application/json" });
-			res.end(JSON.stringify({ id: listId, name: listName, items }));
+			res.end(JSON.stringify({ id: listId, name: listName, finals, items }));
 		} catch (e) {
 			res.writeHead(502);
 			res.end(JSON.stringify({ error: e.message }));
 		}
+		return;
+	}
+	if (req.url.startsWith("/find-material")) {
+		// Search gatherable materials by name (anything in the item->nodes index,
+		// which includes mining/botany nodes and fishing holes). Prefix matches
+		// rank above substring matches; capped at 20.
+		const q = (new URL(req.url, "http://localhost").searchParams.get("q") ?? "").trim().toLowerCase();
+		if (q.length < 2) { res.writeHead(200, { "Content-Type": "application/json" }); res.end("[]"); return; }
+		const starts = [], contains = [];
+		for (const id of Object.keys(itemNodes)) {
+			const name = (itemNames[id] ?? allItemNames[id] ?? "").toLowerCase();
+			if (!name) continue;
+			if (name.startsWith(q)) starts.push(id);
+			else if (name.includes(q)) contains.push(id);
+			if (starts.length >= 20) break;
+		}
+		const hits = [...starts, ...contains].slice(0, 20).map((id) => ({
+			id: Number(id),
+			name: itemNames[id] ?? allItemNames[id],
+			nodes: itemNodes[id],
+			maps: [...new Set(itemNodes[id].map((n) => n.map))],
+		}));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(hits));
 		return;
 	}
 	if (req.url === "/hunting-log") {
@@ -388,23 +455,31 @@ ci.on("ready", async () => {
 
 ci.on("error", (err) => console.error("[pcap] error:", err));
 
+// Keep retrying until the bridge is back — a single attempt used to leave the
+// daemon permanently deaf (UI showed stale zone/position) when the bridge was
+// restarted or down for more than ~2s. Backs off 2s -> 10s.
 let reconnecting = false;
 ci.on("stopped", () => {
 	state.connected = false;
 	broadcast({ type: "disconnected" });
 	if (reconnecting) return;
 	reconnecting = true;
-	console.log("[pcap] capture stopped — reconnecting in 2s…");
-	setTimeout(async () => {
+	let attempt = 0;
+	const retry = async () => {
+		attempt++;
 		try {
 			await ci.start();
 			state.connected = true;
-			broadcast({ type: "connected" });
-			console.log("[pcap] reconnected.");
-		} catch (err) {
-			console.error("[pcap] reconnect failed:", err);
-		} finally {
 			reconnecting = false;
+			broadcast({ type: "connected" });
+			console.log(`[pcap] reconnected (attempt ${attempt}).`);
+		} catch (err) {
+			const delay = Math.min(2000 * attempt, 10000);
+			if (attempt === 1 || attempt % 10 === 0)
+				console.error(`[pcap] reconnect attempt ${attempt} failed (${err.message ?? err}) — retrying every ${delay / 1000}s`);
+			setTimeout(retry, delay);
 		}
-	}, 2000);
+	};
+	console.log("[pcap] capture stopped — reconnecting in 2s…");
+	setTimeout(retry, 2000);
 });
