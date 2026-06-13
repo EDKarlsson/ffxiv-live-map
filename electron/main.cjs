@@ -14,7 +14,7 @@
  */
 
 const { app, BrowserWindow, dialog, shell } = require("electron");
-const { spawn, spawnSync } = require("node:child_process");
+const { spawn } = require("node:child_process");
 const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
@@ -64,10 +64,18 @@ async function startStack() {
 	// node too.
 	const nodeEnv = { ...process.env, ELECTRON_RUN_AS_NODE: "1" };
 
-	// 1. Build bundled data on first run (no-op once cached).
-	const ed = spawnSync(process.execPath, ["scripts/ensure-data.mjs"], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
-	if (ed.error) throw ed.error; // spawn itself failed (binary missing, EACCES, …) — status is null in that case
-	if (ed.status !== 0) throw new Error("data build failed (scripts/ensure-data.mjs).");
+	// 1. Build bundled data on first run (no-op once cached). Spawn async, not
+	// spawnSync: the first build can take ~20s and a synchronous call would block
+	// Electron's main-process event loop the whole time (risking an OS "not
+	// responding" prompt). startStack is already async, so we just await it.
+	await new Promise((resolve, reject) => {
+		const ed = spawn(process.execPath, ["scripts/ensure-data.mjs"], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
+		ed.on("error", reject); // spawn itself failed (binary missing, EACCES, …)
+		ed.on("exit", (code) => {
+			if (code === 0) resolve();
+			else reject(new Error("data build failed (scripts/ensure-data.mjs)."));
+		});
+	});
 
 	// 2. Deucalion bridge — start ours unless one is already listening. The
 	// script bails if FFXIV/Teamcraft aren't up, so the wait below will time out
@@ -141,6 +149,18 @@ function createWindow() {
 	win.webContents.setWindowOpenHandler(({ url }) => {
 		if (/^https?:\/\//.test(url)) shell.openExternal(url);
 		return { action: "deny" };
+	});
+	// Pin the window to our localhost UI. setWindowOpenHandler only covers popups
+	// (window.open / target="_blank"); a *top-level* navigation — a link without
+	// target, a redirect, a location change — would otherwise load an external page
+	// inside this privileged window. Bounce any off-localhost navigation to the
+	// real browser (http(s) only) and cancel it here.
+	win.webContents.on("will-navigate", (event, navUrl) => {
+		let u;
+		try { u = new URL(navUrl); } catch { return; }
+		if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return;
+		event.preventDefault();
+		if (u.protocol === "http:" || u.protocol === "https:") shell.openExternal(navUrl);
 	});
 	win.on("closed", () => { win = null; });
 }
