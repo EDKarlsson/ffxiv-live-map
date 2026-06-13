@@ -27,6 +27,7 @@ const URL = `http://localhost:${HTTP_PORT}`;
 let bridge = null;
 let daemon = null;
 let win = null;
+let quitting = false; // set during teardown so child 'exit' handlers don't treat it as a crash
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -72,13 +73,22 @@ async function startStack() {
 	// script bails if FFXIV/Teamcraft aren't up, so the wait below will time out
 	// with a clear message in that case.
 	if (!(await tcpListening(BRIDGE_PORT))) {
-		// detached: the bash wrapper respawns `wine` in a loop, so it must be its
-		// own process-group leader. That's the only way killStack() can take the
-		// whole tree (bash + wine) down later via a negative-PID signal — otherwise
-		// the orphaned wine child keeps holding the TCP port. (Not unref'd: we want
-		// to keep tracking it so we can kill it on quit.)
-		bridge = spawn("bash", ["scripts/start-bridge.sh", String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
-		bridge.on("exit", (code) => { console.log(`[app] bridge exited (${code})`); });
+		// The bundled bridge is macOS-only — scripts/start-bridge.sh hardcodes the
+		// XIV-on-Mac wine paths. On other platforms `spawn("bash", …)` would ENOENT
+		// and the unhandled 'error' event would crash Electron, so only spawn on
+		// darwin; elsewhere the wait below fails with a clear "bridge never came up".
+		if (process.platform === "darwin") {
+			// detached: the bash wrapper respawns `wine` in a loop, so it must be its
+			// own process-group leader — the only way killStack() can take the whole
+			// tree (bash + wine) down later via a negative-PID signal, instead of
+			// orphaning the wine child still holding the TCP port. (Not unref'd: we
+			// keep tracking it so we can kill it on quit.)
+			bridge = spawn("bash", ["scripts/start-bridge.sh", String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
+			bridge.on("error", (err) => { console.error(`[app] bridge spawn failed: ${err.message}`); });
+			bridge.on("exit", (code) => { console.log(`[app] bridge exited (${code})`); });
+		} else {
+			console.warn(`[app] auto-starting the bridge is macOS-only; start a Deucalion bridge on :${BRIDGE_PORT} yourself first.`);
+		}
 	}
 	if (!(await waitFor(() => tcpListening(BRIDGE_PORT)))) {
 		throw new Error(
@@ -94,7 +104,17 @@ async function startStack() {
 		console.log(`[app] reusing daemon already serving on ${URL}`);
 	} else {
 		daemon = spawn(process.execPath, ["src/daemon.mjs", "--bridge-port", String(BRIDGE_PORT), "--http-port", String(HTTP_PORT)], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
-		daemon.on("exit", (code) => { console.log(`[app] daemon exited (${code})`); });
+		daemon.on("exit", (code) => {
+			console.log(`[app] daemon exited (${code})`);
+			// A crash after startup (port conflict, runtime error) would otherwise
+			// leave the window open over a dead backend. A null code means we killed
+			// it on quit (signal), so surface only genuine crashes — and not while
+			// we're already tearing down.
+			if (!quitting && code !== 0 && code !== null) {
+				dialog.showErrorBox("FFXIV Live Map — daemon stopped", `The map daemon exited unexpectedly (code ${code}).`);
+				app.quit();
+			}
+		});
 		if (!(await waitFor(() => httpOk(`${URL}/maps`)))) {
 			throw new Error(`The daemon did not start serving on ${URL}.`);
 		}
@@ -126,16 +146,16 @@ function createWindow() {
 }
 
 function killStack() {
+	quitting = true;
 	// The daemon is a lone node process, so child.kill() reaps it cleanly. The
 	// bridge is a bash wrapper that respawns `wine` in a loop — killing only bash
-	// orphans the wine child, which keeps holding the TCP port. We spawned the
-	// bridge detached (its own process group), so a negative PID signals the whole
-	// group (bash + wine) at once. Windows has neither process groups nor the wine
-	// bridge, so fall back to child.kill() there.
+	// orphans the wine child, which keeps holding the TCP port. The bridge is only
+	// ever spawned on macOS (detached, its own process group), so there a negative
+	// PID signals the whole group (bash + wine) at once.
 	for (const child of [daemon, bridge]) {
 		if (!child || child.killed) continue;
 		try {
-			if (child === bridge && process.platform !== "win32") {
+			if (child === bridge && process.platform === "darwin") {
 				process.kill(-child.pid, "SIGTERM");
 			} else {
 				child.kill();
@@ -147,8 +167,10 @@ function killStack() {
 }
 
 // One instance only — a second launch would spawn a duplicate bridge/daemon.
+// app.exit() (not quit()) terminates the duplicate immediately, before it can
+// run any further startup that might touch the ports the first instance owns.
 if (!app.requestSingleInstanceLock()) {
-	app.quit();
+	app.exit();
 } else {
 	app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
@@ -167,4 +189,11 @@ if (!app.requestSingleInstanceLock()) {
 	app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
 	app.on("before-quit", killStack);
 	app.on("quit", killStack);
+
+	// Terminal Ctrl+C / kill: the bridge is detached in its own process group, so
+	// it won't receive the shell's SIGINT — tear the stack down explicitly before
+	// exiting, otherwise the bridge (and its wine child) would leak.
+	for (const sig of ["SIGINT", "SIGTERM"]) {
+		process.on(sig, () => { killStack(); app.exit(); });
+	}
 }
