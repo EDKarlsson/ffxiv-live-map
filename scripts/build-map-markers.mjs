@@ -14,8 +14,13 @@
  *   - The `rows=` query param only returns subrow 0, so we walk the whole
  *     sheet with the `after=row:subrow` cursor instead (~500/page).
  *
+ * Icon-only markers (Shop, Repairs, Market Board, …) carry no label text —
+ * their hover names live in the MapSymbol sheet (icon -> PlaceName), emitted
+ * separately so the UI can tooltip them without drawing text labels.
+ *
  * Output: data/map-markers.json =
  *   { mapId: [ { x, y (pixels), icon, label, type, target? } ] }
+ *         data/map-symbols.json = { iconId: "Symbol name" }
  *
  * Usage: node scripts/build-map-markers.mjs
  */
@@ -78,3 +83,17 @@ for (;;) {
 
 writeFileSync(join(__dirname, "../data/map-markers.json"), JSON.stringify(out));
 console.log(`map-markers: ${kept} markers on ${Object.keys(out).length} maps (walked ${subrows} subrows, ${pages} pages)`);
+
+// --- MapSymbol: icon id -> display name ("Repairs", "Market Board", …) ------------
+const symbols = {};
+{
+	const j = await fetch(`${API}/sheet/MapSymbol?version=latest&limit=500&fields=${encodeURIComponent("Icon,PlaceName.Name")}`).then((r) => r.json());
+	for (const r of j.rows ?? []) {
+		const f = r.fields;
+		const icon = typeof f.Icon === "object" ? f.Icon?.id : f.Icon;
+		const name = f.PlaceName?.fields?.Name;
+		if (icon && name) symbols[icon] = name;
+	}
+}
+writeFileSync(join(__dirname, "../data/map-symbols.json"), JSON.stringify(symbols));
+console.log(`map-symbols: ${Object.keys(symbols).length} named icons`);

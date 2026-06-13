@@ -173,6 +173,7 @@
 	<select id="mapPicker"></select>
 	<label><input type="checkbox" id="contentOnly" checked> Only maps with content</label>
 	<label><input type="checkbox" id="followToggle" checked> Follow player</label>
+	<label><input type="checkbox" id="keepZoom" checked> Keep zoom on map switch</label>
 	<div id="coords">X: –  Y: –</div>
 	<div id="nodeCount" class="muted"></div>
 	<div id="etClock" class="muted">ET --:--</div>
@@ -577,14 +578,17 @@ async function loadMapMarkers(m) {
 			layers.zonelinks.addLayer(lm);
 			continue;
 		}
-		// POI icon (aetherytes type 3, aethernet 4, everything else 0)
+		// POI icon (aetherytes type 3, aethernet 4, everything else 0).
+		// Hover name: the marker's own label, else the MapSymbol name the
+		// daemon attached ("Repairs", "Shop", …), else the type kind.
 		if (mk.icon) {
 			const kind = mk.type === 3 ? "Aetheryte" : mk.type === 4 ? "Aethernet shard" : "";
+			const hover = [mk.label?.split("\n")[0] || mk.name, kind].filter(Boolean).join(" — ") || kind;
 			const pm = L.marker(ll, {
 				icon: L.divIcon({ className: "node-icon poi-icon", html: `<img src="${iconAsset(mk.icon)}">`, iconSize: [24, 24], iconAnchor: [12, 12] }),
-				interactive: !!(mk.label || kind),
+				interactive: !!hover,
 			});
-			if (mk.label || kind) pm.bindTooltip([mk.label.split("\n")[0], kind].filter(Boolean).join(" — "));
+			if (hover) pm.bindTooltip(hover).bindPopup(`<b>${hover}</b> <span class="nlvl">(${pxToCoord(mk.x, m.size_factor).toFixed(1)}, ${pxToCoord(mk.y, m.size_factor).toFixed(1)})</span>`);
 			layers.pois.addLayer(pm);
 		}
 		// Text label (offset below when it shares the spot with an icon)
@@ -1149,12 +1153,20 @@ function setFollow(v) {
 }
 document.getElementById("followToggle").onchange = (e) => setFollow(e.target.checked);
 
+// Zoom-reset on map switch is configurable: zone-link hops between adjacent
+// zones feel better keeping the zoom level; fitBounds is the reset behavior.
+const keepZoomBox = document.getElementById("keepZoom");
+keepZoomBox.checked = (localStorage.getItem("keepZoom") ?? "1") === "1";
+keepZoomBox.onchange = () => localStorage.setItem("keepZoom", keepZoomBox.checked ? "1" : "0");
+
 function viewMap(m) {
 	if (!m || viewedMap?.id === m.id) { refreshMarker(); return; }
+	const prevZoom = viewedMap ? map.getZoom() : null;
 	viewedMap = m;
 	if (overlay) { overlay.remove(); overlay = null; }
 	overlay = L.imageOverlay(m.image, bounds, { pane: "basemap" }).addTo(map);
 	map.fitBounds(bounds);
+	if (keepZoomBox.checked && prevZoom !== null) map.setZoom(prevZoom, { animate: false });
 	applyPickerSelection(m);
 	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
 	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
