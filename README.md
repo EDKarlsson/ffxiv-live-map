@@ -10,10 +10,33 @@ injection — packets in, WebSocket out.
 
 ## Screenshots
 
-<!-- TODO: drop screenshots into docs/img/ and reference them here.
-     Suggested shots: live dot + node circles; timed-node panel with an
-     active node glowing; a Teamcraft list "To gather" checklist with a
-     farming route; the map browser. -->
+**Live player position** — your character (with heading arrow) on the correct
+zone map, alongside in-game place labels, specialty POI icons, and clickable
+zone links.
+
+![Live player dot in Limsa Lominsa Lower Decks](docs/img/01-live-dot-limsa.png)
+
+**Gathering nodes** — MIN/BTN nodes with dashed spawn-area circles; every popup
+links the items straight to GarlandTools.
+
+![Gathering node with its spawn-area circle and GarlandTools item links](docs/img/02-gathering-nodes.png)
+
+**Timed nodes & "what's up now"** — live Eorzea-time countdowns; an active node
+glows on the map while the global planner lists every unspoiled node currently up.
+
+![A timed node glowing, with the timed-node panel and what's-up-now planner](docs/img/03-timed-node-glow.png)
+
+**Teamcraft list import** — paste a list URL and it pulls Teamcraft's full
+ingredient breakdown: a "To gather" checklist with remaining amounts and how
+many maps each material spans, gold rings on every matching node, and a route
+over them.
+
+![Importing a Teamcraft gear list — the To-gather checklist with node rings and a route](docs/img/05-list-import.png)
+
+**Farming routes** — a TSP-ordered path over a zone's gathering nodes, numbered
+from where you're standing.
+
+![A numbered farming route across South Shroud](docs/img/04-farming-route.png)
 
 ## A note on packet capture & ToS
 
