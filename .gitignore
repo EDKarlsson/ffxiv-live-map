@@ -5,6 +5,9 @@ node_modules/
 custom-markers.json
 scripts/.tc-cache/
 
+# Test coverage reports
+coverage/
+
 # Local Claude agent config + memory (personal notes — never share)
 .claude/
 

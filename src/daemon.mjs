@@ -74,7 +74,8 @@ watch(DATA_DIR, () => {
 });
 
 // User-placed custom markers, persisted to disk: { mapId: [ {id, x, y, label, color} ] }
-const MARKERS_FILE = join(__dirname, "../custom-markers.json");
+// Env override (FFXIV_MARKERS_FILE) keeps tests/CI off the user's real markers file.
+const MARKERS_FILE = process.env.FFXIV_MARKERS_FILE || join(__dirname, "../custom-markers.json");
 let customMarkers = {};
 try {
 	if (existsSync(MARKERS_FILE)) customMarkers = JSON.parse(readFileSync(MARKERS_FILE, "utf-8"));
@@ -100,6 +101,11 @@ const argVal = (name, def) => {
 const BRIDGE_PORT = Number(argVal("--bridge-port", 31594));
 const HTTP_PORT = Number(argVal("--http-port", 8787));
 const VERBOSE = args.includes("--verbose");
+// Test/dev seams: run the HTTP+WS server without the packet-capture stack
+// (--no-capture), or with a synthetic moving character (--mock) for headless
+// verification when the game isn't running (e.g. CI, or remote with no game).
+const NO_CAPTURE = args.includes("--no-capture");
+const MOCK = args.includes("--mock"); // implies no real capture
 
 // --- State ------------------------------------------------------------------
 const state = {
@@ -398,10 +404,42 @@ server.listen(HTTP_PORT, () => {
 	console.log(`[map] UI on http://localhost:${HTTP_PORT} (bridge port ${BRIDGE_PORT})`);
 });
 
+// --- Mock character (--mock) --------------------------------------------------
+// Synthetic zone + movement for headless/remote verification when the game
+// isn't running. Reuses the exact broadcast plumbing real capture uses, so the
+// UI's player dot, "follow", and the status pill all exercise. Walks a circle in
+// raw world coords through convertPosition, just like a real position packet.
+if (MOCK) {
+	const zoneId = Number(argVal("--mock-zone", 129)); // 129 = Limsa Lominsa Lower Decks
+	// mapsIndex holds slim index entries (no offset_x/size_factor); resolve the
+	// full map via mapById so convertPosition doesn't produce NaN coords.
+	const map = mapForTerritory(zoneId) ?? (mapsIndex[0] ? mapById(mapsIndex[0].id) : null);
+	if (!map) {
+		console.warn(`[mock] no map found for zone ${zoneId} (is data/ built?) — mock idle.`);
+	} else {
+		state.map = map;
+		state.connected = true;
+		console.log(`[mock] synthetic character in ${map.image} (zone ${zoneId}) — pass --mock-zone <id> to change.`);
+		broadcast({ type: "zone", map });
+		broadcast({ type: "connected" });
+		let t = 0;
+		setInterval(() => {
+			t += 0.08;
+			// pos.x = E-W, pos.z = N-S drive the map plane; pos.y is altitude (ignored).
+			const raw = { x: 100 * Math.cos(t), y: 0, z: 100 * Math.sin(t) };
+			state.pos = convertPosition(raw, state.map);
+			state.rotation = t % (Math.PI * 2);
+			broadcast({ type: "pos", pos: state.pos, rotation: state.rotation });
+			// No persistState() here: the mock is ephemeral and must not clobber the
+			// user's real .state.json with synthetic coordinates.
+		}, 500);
+	}
+}
+
 // --- Packet capture -----------------------------------------------------------
 const WANTED = new Set(["updatePositionHandler", "updatePositionInstance", "initZone", "playerSpawn"]);
 
-const ci = new CaptureInterface({
+const ci = (NO_CAPTURE || MOCK) ? null : new CaptureInterface({
 	region: "Global",
 	bridgeTcpPort: BRIDGE_PORT,
 	filter: (_header, typeName) => WANTED.has(typeName),
@@ -426,7 +464,7 @@ function handlePosition(pos, rotation) {
 	}
 }
 
-ci.on("message", (m) => {
+ci?.on("message", (m) => {
 	const d = m.parsedIpcData;
 	if (!d) return;
 	switch (m.type) {
@@ -456,7 +494,7 @@ ci.on("message", (m) => {
 	}
 });
 
-ci.on("ready", async () => {
+ci?.on("ready", async () => {
 	console.log("[pcap] opcodes/constants loaded, connecting to bridge...");
 	setTimeout(() => {
 		if (!state.connected) {
@@ -480,13 +518,13 @@ ci.on("ready", async () => {
 	}
 });
 
-ci.on("error", (err) => console.error("[pcap] error:", err));
+ci?.on("error", (err) => console.error("[pcap] error:", err));
 
 // Keep retrying until the bridge is back — a single attempt used to leave the
 // daemon permanently deaf (UI showed stale zone/position) when the bridge was
 // restarted or down for more than ~2s. Backs off 2s -> 10s.
 let reconnecting = false;
-ci.on("stopped", () => {
+ci?.on("stopped", () => {
 	state.connected = false;
 	broadcast({ type: "disconnected" });
 	if (reconnecting) return;

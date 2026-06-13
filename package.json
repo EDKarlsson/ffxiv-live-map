@@ -11,10 +11,14 @@
 		"app": "electron electron/main.cjs",
 		"bridge": "scripts/start-bridge.sh",
 		"prestart:own-bridge": "node scripts/ensure-data.mjs",
-		"start:own-bridge": "node src/daemon.mjs --bridge-port 31595"
+		"start:own-bridge": "node src/daemon.mjs --bridge-port 31595",
+		"mock": "node scripts/ensure-data.mjs && node src/daemon.mjs --mock",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage"
 	},
 	"engines": {
-		"node": ">=18"
+		"node": ">=20"
 	},
 	"dependencies": {
 		"@ffxiv-teamcraft/pcap-ffxiv": "1.2.33",
@@ -22,6 +26,9 @@
 	},
 	"license": "MIT",
 	"devDependencies": {
-		"electron": "^42.4.0"
+		"@vitest/coverage-v8": "^4.1.8",
+		"electron": "^42.4.0",
+		"happy-dom": "^20.10.3",
+		"vitest": "^4.1.8"
 	}
 }
