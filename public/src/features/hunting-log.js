@@ -43,8 +43,10 @@ async function gotoMob(mobId) {
 	const mob = mobData.find((x) => x.id === mobId);
 	if (mob) {
 		if (!mobChecked.has(mobId)) { mobChecked.add(mobId); showMob(mob); renderMobList(); }
-		map.flyTo(coordLL(mob.points[0][0], mob.points[0][1]), 1);
-		mobLayers.get(mobId)?.getLayers()[0]?.openPopup();
+		if (mob.points?.length) {
+			map.flyTo(coordLL(mob.points[0][0], mob.points[0][1]), 1);
+			mobLayers.get(mobId)?.getLayers()[0]?.openPopup();
+		}
 	}
 }
 

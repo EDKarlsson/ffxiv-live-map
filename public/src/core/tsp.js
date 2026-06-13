@@ -22,10 +22,13 @@ export function tour(points, start) {
 		improved = false;
 		for (let i = fixed; i < route.length - 1; i++) {
 			for (let k = i + 1; k < route.length; k++) {
-				const a = route[i - 1] ?? route[i], b = route[i];
+				const b = route[i];
 				const c = route[k], d = route[k + 1];
-				const before = dist(a, b) + (d ? dist(c, d) : 0);
-				const after = dist(a, c) + (d ? dist(b, d) : 0);
+				// At i === 0 there's no predecessor edge, so omit it. (The old
+				// `route[i-1] ?? route[i]` fallback wrongly charged dist(route[0], c)
+				// to `after`, suppressing valid prefix-reversal improvements.)
+				const before = (i > 0 ? dist(route[i - 1], b) : 0) + (d ? dist(c, d) : 0);
+				const after = (i > 0 ? dist(route[i - 1], c) : 0) + (d ? dist(b, d) : 0);
 				if (after + 1e-9 < before) {
 					let lo = i, hi = k;
 					while (lo < hi) { [route[lo], route[hi]] = [route[hi], route[lo]]; lo++; hi--; }

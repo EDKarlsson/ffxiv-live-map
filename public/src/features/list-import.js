@@ -13,15 +13,19 @@ export async function listImport() {
 	if (!id) return;
 	const info = document.getElementById("listInfo");
 	info.textContent = "loading…";
-	const res = await fetch(`/list?id=${encodeURIComponent(id)}`).then((r) => r.json());
-	if (res.error) { info.textContent = `error: ${res.error}`; return; }
-	listData = res;
-	const gatherable = res.items.filter((i) => i.gatherable);
-	const other = res.items.length - gatherable.length;
-	info.textContent = `${res.name}: ${gatherable.length} material${gatherable.length === 1 ? "" : "s"} to gather` +
-		(other ? ` (${other} crafted/bought hidden)` : "");
-	renderList();
-	highlightListNodes();
+	try {
+		const res = await fetch(`/list?id=${encodeURIComponent(id)}`).then((r) => r.json());
+		if (res.error) { info.textContent = `error: ${res.error}`; return; }
+		listData = res;
+		const gatherable = res.items.filter((i) => i.gatherable);
+		const other = res.items.length - gatherable.length;
+		info.textContent = `${res.name}: ${gatherable.length} material${gatherable.length === 1 ? "" : "s"} to gather` +
+			(other ? ` (${other} crafted/bought hidden)` : "");
+		renderList();
+		highlightListNodes();
+	} catch (err) {
+		info.textContent = `error: ${err.message || err}`;
+	}
 }
 
 export function renderList() {

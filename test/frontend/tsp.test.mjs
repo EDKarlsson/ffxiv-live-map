@@ -33,4 +33,11 @@ describe("tsp route solver", () => {
 		const pts = [{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 10, y: 0 }, { x: 0, y: 10 }];
 		expect(pathLen(tour(pts))).toBeLessThanOrEqual(30 + 1e-6);
 	});
+
+	it("reaches the brute-force optimum on a small set (open-path correctness)", () => {
+		const pts = [{ x: 0, y: 0 }, { x: 1, y: 4 }, { x: 2, y: 0 }, { x: 3, y: 4 }, { x: 4, y: 0 }];
+		const permutations = (a) => a.length <= 1 ? [a] : a.flatMap((x, i) => permutations([...a.slice(0, i), ...a.slice(i + 1)]).map((p) => [x, ...p]));
+		const optimal = Math.min(...permutations(pts).map(pathLen));
+		expect(pathLen(tour(pts))).toBeCloseTo(optimal, 6);
+	});
 });

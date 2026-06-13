@@ -13,7 +13,9 @@ function renderStatus() {
 }
 
 export function connect() {
-	const ws = new WebSocket(`ws://${location.host}`);
+	// Match the page protocol so this also works behind HTTPS (wss vs ws).
+	const proto = location.protocol === "https:" ? "wss" : "ws";
+	const ws = new WebSocket(`${proto}://${location.host}`);
 	ws.onopen = () => { wsUp = true; renderStatus(); };
 	ws.onclose = () => {
 		wsUp = false; renderStatus();

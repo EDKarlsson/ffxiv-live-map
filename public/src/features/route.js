@@ -12,6 +12,7 @@ export function planRoute() {
 	routeLayer.clearLayers();
 	const src = document.getElementById("routeSource").value;
 	const info = document.getElementById("routeInfo");
+	if (!state.viewedMap) { info.textContent = "load a map first"; return; }
 	let pts = [];
 	let listCover = null;
 	if (src === "list") {
