@@ -411,7 +411,9 @@ server.listen(HTTP_PORT, () => {
 // raw world coords through convertPosition, just like a real position packet.
 if (MOCK) {
 	const zoneId = Number(argVal("--mock-zone", 129)); // 129 = Limsa Lominsa Lower Decks
-	const map = mapForTerritory(zoneId) ?? mapsIndex[0];
+	// mapsIndex holds slim index entries (no offset_x/size_factor); resolve the
+	// full map via mapById so convertPosition doesn't produce NaN coords.
+	const map = mapForTerritory(zoneId) ?? (mapsIndex[0] ? mapById(mapsIndex[0].id) : null);
 	if (!map) {
 		console.warn(`[mock] no map found for zone ${zoneId} (is data/ built?) — mock idle.`);
 	} else {
