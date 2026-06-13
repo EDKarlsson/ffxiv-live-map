@@ -15,6 +15,14 @@ start:own-bridge`), map open at http://localhost:8787.
 - **Timed-node ET window** — Spruce Log node = Providence Point, Lv50 Botanist,
   Unspoiled, ET 09:00: matches GarlandTools. ET math already live-verified.
 - **Legendary flag** corrected to use the folklore field (was over-flagged).
+- **Vistas** — Barracuda Piers: Limsa Upper Decks (9.6, 7.8) / ET 08:00–11:59 /
+  Lookout matches the wiki Sightseeing Log table ((9.5, 7.8), 08:00–12:00).
+- **Aether currents** — Coerthas Western Highlands + Dravanian Forelands field
+  counts (4 each) and coords match the wiki "Aether Currents" page within 0.1;
+  quest lists match (5 each).
+- **Fishing holes** — from the game's FishingSpot sheet (via TC), not
+  crowdsourced; Limsa Lower Decks spot carries the expected starter fish
+  (Lominsan Anchovy, Merlthor Goby).
 
 ## To confirm in-game
 
@@ -27,8 +35,8 @@ start:own-bridge`), map open at http://localhost:8787.
   confirm the mob actually appears where the dot lands.
 
 ### 2. Teamcraft list import → node match
-- Import a list that contains **raw gathered mats** (not a pure crafting list —
-  gear lists resolve to bought intermediates with no gatherables).
+- Any list works now — the import decodes the full material breakdown, so gear
+  lists show their raw mats under "To gather" with remaining amounts.
 - For one gatherable item, click it → confirm it jumps to a real node, and the
   gold ring sits where that node actually is in-game.
 - Cross-check one item's node vs its GarlandTools page if unsure.
@@ -38,7 +46,21 @@ start:own-bridge`), map open at http://localhost:8787.
 - Confirm the numbered path visits each required node and roughly matches a
   sensible walking order. (TSP is unit-tested; this is just a sanity look.)
 
-### 4. "What's up now" → live ET
+### 4. New layers (added 2026-06-12 — restart the daemon first, hot-reload
+### only covers data, not the new endpoints)
+- **Fishing holes**: toggle "Fishing holes", go to any ARR coast/river — the
+  circle should sit on fishable water; catch one listed fish.
+- **Treasure spots**: open "Treasure maps" panel on e.g. Central Shroud, tick
+  Timeworn Leather Map — ❌ pins; if you ever hold that map, compare one spot.
+- **Vistas**: toggle "Vistas" in Limsa Upper Decks — Barracuda Piers 🔭 at
+  (9.6, 7.8); stand there, /lookout in the ET window (+ Fair/Clear skies).
+- **Aether currents**: HW-only — defer until you're in Heavensward. Panel
+  should show "none on this map (ARR zones have no currents)" everywhere now.
+- **Status pill**: with everything live, kill the bridge terminal — pill should
+  flip to "no packet capture" within seconds; restart the bridge — it should
+  return to "live" on its own (reconnect loop), no daemon restart.
+
+### 5. "What's up now" → live ET
 - Set Job + level cap to something you can reach; toggle "Only show up now".
 - Pick a node marked **● UP**, click to jump, gather it in-game to confirm the
   window is actually open. Compare the app's ET clock to the in-game ET clock

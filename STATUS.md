@@ -26,12 +26,16 @@ ffxiv_dx11.exe (Wine) ─ deucalion.dll ─ pipe ─ deucalion-bridge.exe ─ TC
 
 - `src/daemon.mjs` — packet capture → tracks position/zone → WebSocket push;
   serves bundled data via REST (`/nodes /monsters /fates /npcs /maps /map
-  /timed-nodes /hunting-log /list /custom`). Hot-reloads `data/` on change.
+  /timed-nodes /hunting-log /list /custom /treasures /fishing-spots /vistas
+  /aether-currents`). Hot-reloads `data/` on change; reconnects to a dropped
+  bridge indefinitely (2s→10s backoff).
 - `src/coords.mjs` — raw packet floats → in-game map coords / image pixels.
   Reads `data/maps.json`. Rewrites map image URLs to XIVAPI v2.
 - `public/index.html` — single-file Leaflet UI, all layers + HUD panels.
-- `scripts/build-node-data.mjs` + `build-hunting-log.mjs` — generate `data/`.
-  `tc-data-source.mjs` fetches Teamcraft JSON from GitHub (staging) with cache.
+- `scripts/build-node-data.mjs` + `build-hunting-log.mjs` +
+  `build-extra-layers.mjs` (vistas + aether currents from XIVAPI v2) —
+  generate `data/`. `tc-data-source.mjs` fetches Teamcraft JSON from GitHub
+  (staging) with cache.
 
 ## Features (all built; verification status noted)
 
@@ -45,10 +49,17 @@ ffxiv_dx11.exe (Wine) ─ deucalion.dll ─ pipe ─ deucalion-bridge.exe ─ TC
 | FATEs (icons + levels) | ⚠️ not in-game verified |
 | NPCs (search-driven, 23k) | ⚠️ not in-game verified |
 | Hunting Log (12 class/GC logs) | ⚠️ data EXACT vs wiki; jump not in-game verified |
-| Teamcraft list import (Firestore REST) → node locations | ⚠️ decode verified, not in-game |
+| Teamcraft list import (Firestore REST) → node locations | ⚠️ decode verified, not in-game. Now decodes BOTH `finalItems` and `items` (full material breakdown) — gear lists show "To gather" mats with remaining amounts (verified: PAL 64-68 list → 28 gatherables) |
 | Custom markers (emoji icons, server-persisted) | ✅ CRUD verified |
 | Farming route (TSP, list-mode primary) | ✅ TSP unit-tested |
 | Map browser (932 maps, content filter, floor labels) | ✅ |
+| Fishing holes (335 spots, fish lists; fish jumpable from list import) | ⚠️ data from game's FishingSpot sheet via TC, not in-game verified |
+| Treasure dig spots (965, per-tier toggles) | ⚠️ TC crowdsourced data, not in-game verified |
+| Vistas (340, ET window + emote + open-now) | ⚠️ Barracuda Piers verified vs wiki (coords/time/emote), not in-game |
+| Aether currents (152 field + quest lists, HW+) | ⚠️ CWH + Dravanian Forelands verified vs wiki, not in-game |
+| Capture-status pill (live / no-capture / daemon down) | ⚠️ new, not tested against a real bridge drop |
+| Material search → jump + ring nodes (incl. fish) | ✅ endpoint verified (copper/anchovy); jump uses the live-verified node coords |
+| Icon-size sliders (per category, localStorage-persisted) | ✅ CSS-var driven; scales inner elements only (Leaflet owns the marker root transform) |
 
 See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
 
@@ -70,16 +81,34 @@ See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
 - **Leaflet z-order:** the map image lives in a low `basemap` pane and vector
   overlays in a high `vectors` pane, else the image paints over the circles.
 - **Data is gitignored** (`data/`) — derived, rebuilt on first run.
+- **Aether currents from sheets:** field currents = EObjName "aether current"
+  → EObj.Data → AetherCurrent, coords from Level (search by Object id).
+  AetherCurrent has 448 rows but ~145 quest-less ones are padding with no
+  EObj — the 152 placed ones are the complete field set (verified vs wiki;
+  HW zones really have only 4 field currents each). Quest-locked currents
+  have no field position; we list quest names instead. ARR zones: none.
+- **XIVAPI v2 search:** space-separated clauses are OR (scored); prefix `+`
+  for AND. `Data>=a Data<=b` without `+` matches nearly everything.
+- **Daemon restart needed after code changes** — hot-reload covers `data/`
+  only. A daemon started before this update serves the old endpoints (no
+  /vistas etc.) even after a data rebuild.
 
 ## Left to do
 
-1. **In-game verification pass** of the ⚠️ features (VERIFICATION.md).
-2. **Layers:** aether currents, vistas, treasure-map (Timeworn) spots — same
-   pattern, data in Teamcraft jsons.
-3. **Regular fishing holes** — current data only has 64 spearfishing nodes (HW+);
-   ARR fishing spots live in a separate `fishing-log` dataset not yet imported.
-4. **Rotation** — captured but not rendered (could orient the player dot).
-5. **Open-source polish before sharing with Teamcraft devs:** LICENSE file,
+1. **In-game verification pass** of the ⚠️ features (VERIFICATION.md) —
+   now includes the four new layers + a bridge-drop test of the status pill.
+2. **Rotation** — captured but not rendered (could orient the player dot).
+3. **Open-source polish before sharing with Teamcraft devs:** LICENSE file,
    screenshots in README, confirm no personal data in repo (checked: none —
    character/list IDs live only in the guide project). Be upfront that live
    position uses Deucalion packet capture (same ToS-gray area as Teamcraft).
+4. **NPC role toggles** — quest givers, vendors, and other special-interaction
+   NPCs as toggleable categories (like the in-game map's icons). Likely
+   sources: TC `shops-by-npc.json`/`quests.json` joins, or the ENpc data.
+5. **Electron (or similar) packaging research** — distributable installable
+   releases so users don't need Node/npm. Compare: Electron (what Teamcraft
+   uses, heavy), Tauri (small, Rust), or pkg/single-executable Node. Must
+   bundle the data build or ship pre-built data.
+6. **Mini-map overlay mode** — compact always-on-top window with transparency
+   to float over the game. Browser can't do always-on-top → ties into the
+   packaging item above (Electron/Tauri frameless transparent window).

@@ -91,15 +91,20 @@ loaded, the bridge just attaches a new pipe subscriber.
 - [x] Map browser — pick any of ~1200 maps (grouped by region), Follow-player toggle
 - [x] Farming routes — nearest-neighbor + 2-opt TSP over node coords, numbered path, starts from your position
 - [x] Data served from XIVAPI v2 asset endpoints (v1 host is frozen)
-- [ ] Aether currents / vistas / treasure spots layers
+- [x] Fishing holes — 335 fishing-log spots with fish lists; fish resolve in list import + routes
+- [x] Treasure dig spots — 965 Timeworn-map spots, per-tier toggles
+- [x] Vistas — full Sightseeing Log with ET windows, emote, open-now status
+- [x] Aether currents — field-current markers + quest lists (HW+ zones)
+- [x] Material search — find any gatherable item (incl. fish), click to jump + ring its nodes
 
 ## Data build
 
 Bundled JSON in `data/` is *derived* data, regenerated from upstream sources:
 
 ```sh
-node scripts/build-node-data.mjs     # nodes, monsters, fates, npcs, maps, item indexes
+node scripts/build-node-data.mjs     # nodes, monsters, fates, npcs, maps, treasure, fishing, item indexes
 node scripts/build-hunting-log.mjs   # hunting log (XIVAPI v2 MonsterNote)
+node scripts/build-extra-layers.mjs  # vistas + aether currents (XIVAPI v2 sheets)
 ```
 
 `build-node-data.mjs` pulls Teamcraft's source JSON straight from the
