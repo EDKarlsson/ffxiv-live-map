@@ -49,19 +49,19 @@ ffxiv_dx11.exe (Wine) ─ deucalion.dll ─ pipe ─ deucalion-bridge.exe ─ TC
 | FATEs (icons + levels) | ⚠️ not in-game verified |
 | NPCs (search-driven, 23k) | ⚠️ not in-game verified |
 | Hunting Log (12 class/GC logs) | ⚠️ data EXACT vs wiki; jump not in-game verified |
-| Teamcraft list import (Firestore REST) → node locations | ⚠️ decode verified, not in-game. Now decodes BOTH `finalItems` and `items` (full material breakdown) — gear lists show "To gather" mats with remaining amounts (verified: PAL 64-68 list → 28 gatherables) |
+| Teamcraft list import (Firestore REST) → node locations | ✅ live-verified incl. click-through; decodes BOTH `finalItems` and `items` so gear lists show "To gather" mats with remaining amounts (PAL 64-68 list → 28 gatherables) |
 | Custom markers (emoji icons, server-persisted) | ✅ CRUD verified |
 | Farming route (TSP, list-mode primary) | ✅ TSP unit-tested |
 | Map browser (932 maps, content filter, floor labels) | ✅ |
-| Fishing holes (335 spots, fish lists; fish jumpable from list import) | ⚠️ data from game's FishingSpot sheet via TC, not in-game verified |
-| Treasure dig spots (965, per-tier toggles) | ⚠️ TC crowdsourced data, not in-game verified |
-| Vistas (340, ET window + emote + open-now) | ⚠️ Barracuda Piers verified vs wiki (coords/time/emote), not in-game |
-| Aether currents (152 field + quest lists, HW+) | ⚠️ CWH + Dravanian Forelands verified vs wiki, not in-game |
+| Fishing holes (335 spots, fish lists; fish jumpable from list import) | ✅ live-verified (Lower La Noscea) |
+| Treasure dig spots (965, per-tier toggles) | ⚠️ TC crowdsourced data, not in-game verified (needs holding a map) |
+| Vistas (340, ET window + emote + open-now) | ✅ live-verified (Lower La Noscea); Barracuda Piers matches wiki |
+| Aether currents (152 field + quest lists, HW+) | ✅ render verified (CWH via map browser); ground truth waits for HW |
 | Capture-status pill (live / no-capture / daemon down) | ⚠️ new, not tested against a real bridge drop |
 | Material search → jump + ring nodes (incl. fish) | ✅ endpoint verified (copper/anchovy); jump uses the live-verified node coords |
 | Icon-size sliders (per category, localStorage-persisted) | ✅ CSS-var driven; scales inner elements only (Leaflet owns the marker root transform) |
-| NPC role toggles (quest givers gold / vendors green) | ⚠️ data verified (fisher-guild NPCs flagged in Limsa), not in-game checked |
-| Player heading arrow (rotation) | ⚠️ uses Teamcraft's mappy formula ((rot−π)×−1); needs in-game direction check |
+| NPC role toggles (quest givers gold / vendors green) | ✅ live-verified in Limsa |
+| Player heading arrow (rotation) | ✅ live-verified vs in-game map arrow (Limsa, facing north) |
 
 See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
 
