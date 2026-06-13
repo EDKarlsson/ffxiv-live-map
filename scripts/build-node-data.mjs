@@ -59,6 +59,37 @@ for (const [id, n] of Object.entries(nodes)) {
 	for (const i of [...n.items, ...(n.hiddenItems ?? [])]) itemIds.add(i);
 }
 
+// --- Treasure-map dig spots: treasures.json is a flat array of
+// { id:"1.0", coords:{x,y}, map, partySize, item } where coords are already
+// in-game map coords and `item` is the timeworn-map item id (e.g. 6688 =
+// Timeworn Leather Map). Group per map; tier names ride the item-name map.
+const treasures = await loadTcJson("treasures.json");
+const treasuresByMap = {};
+for (const t of treasures) {
+	if (t.map === undefined || t.coords?.x === undefined || !t.item) continue;
+	(treasuresByMap[t.map] ??= []).push({ x: t.coords.x, y: t.coords.y, item: t.item, party: t.partySize ?? 1 });
+	itemIds.add(t.item);
+}
+
+// --- Regular fishing holes: fishing-spots.json (the FSH fishing-log spots —
+// ARR+ shore/river fishing missing from nodes.json, which only carries the
+// HW+ spearfishing nodes). { id, mapId, coords:{x,y} (in-game map coords),
+// radius, level, fishes:[item ids] }
+const fishingSpots = await loadTcJson("fishing-spots.json");
+const fishingByMap = {};
+for (const s of fishingSpots) {
+	if (s.mapId === undefined || s.coords?.x === undefined) continue;
+	(fishingByMap[s.mapId] ??= []).push({
+		id: s.id,
+		level: s.level ?? 0,
+		x: s.coords.x,
+		y: s.coords.y,
+		radius: s.radius ?? 0,
+		fishes: s.fishes ?? [],
+	});
+	for (const f of s.fishes ?? []) itemIds.add(f);
+}
+
 const names = {};
 for (const id of itemIds) {
 	names[id] = items[id]?.en ?? `#${id}`;
@@ -79,10 +110,26 @@ for (const [id, n] of Object.entries(out)) {
 	}
 }
 
+// Fish count as gatherable too: map each fish to its fishing spots so the
+// Teamcraft list import and farming routes can jump to fishing holes.
+// type 4 = Fishing (per the nodes.json type enum); `node` gets a string id
+// so it can't collide with numeric gathering-node ids in route dedup.
+for (const [mapId, spots] of Object.entries(fishingByMap)) {
+	for (const s of spots) {
+		for (const f of s.fishes) {
+			(itemNodes[f] ??= []).push({ node: `fish-${s.id}`, map: Number(mapId), x: s.x, y: s.y, type: 4, level: s.level });
+		}
+	}
+}
+
 writeFileSync(join(__dirname, "../data/nodes.json"), JSON.stringify(out));
 writeFileSync(join(__dirname, "../data/item-names.json"), JSON.stringify(names));
 writeFileSync(join(__dirname, "../data/item-nodes.json"), JSON.stringify(itemNodes));
+writeFileSync(join(__dirname, "../data/treasures.json"), JSON.stringify(treasuresByMap));
+writeFileSync(join(__dirname, "../data/fishing-spots.json"), JSON.stringify(fishingByMap));
 console.log(`nodes: ${Object.keys(out).length}, item names: ${itemIds.size}, gatherable items: ${Object.keys(itemNodes).length}`);
+console.log(`treasure maps: ${Object.keys(treasuresByMap).length}, spots: ${Object.values(treasuresByMap).flat().length}; ` +
+	`fishing maps: ${Object.keys(fishingByMap).length}, spots: ${Object.values(fishingByMap).flat().length}`);
 
 // --- Monsters: monsters.json keyed by mob name id (joins mobs.json), each with
 // positions [{map, zoneid, level, fate, x, y, z}] in in-game map coords.
@@ -160,6 +207,8 @@ const contentMaps = new Set([
 	...Object.keys(byMap).map(Number),
 	...Object.keys(fatesByMap).map(Number),
 	...Object.keys(npcsByMap).map(Number),
+	...Object.keys(treasuresByMap).map(Number),
+	...Object.keys(fishingByMap).map(Number),
 ]);
 
 let mapsIndex = Object.values(maps)
