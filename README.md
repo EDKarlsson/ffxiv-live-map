@@ -119,6 +119,7 @@ loaded, the bridge just attaches a new pipe subscriber.
 - [x] NPC role toggles — quest givers (gold) and vendors (green)
 - [x] Player heading arrow — dot shows facing direction from packet rotation
 - [x] Per-category icon-size sliders (persisted)
+- [x] In-game map markers — place-name labels, specialty POI icons (aetherytes, market boards, guilds…), clickable zone links (MapMarker sheet)
 
 ## Data build
 
@@ -127,7 +128,8 @@ Bundled JSON in `data/` is *derived* data, regenerated from upstream sources:
 ```sh
 node scripts/build-node-data.mjs     # nodes, monsters, fates, npcs, maps, treasure, fishing, item indexes
 node scripts/build-hunting-log.mjs   # hunting log (XIVAPI v2 MonsterNote)
-node scripts/build-extra-layers.mjs  # vistas + aether currents (XIVAPI v2 sheets)
+node scripts/build-extra-layers.mjs  # vistas + aether currents + NPC roles (XIVAPI v2)
+node scripts/build-map-markers.mjs   # map labels, POI icons, zone links (MapMarker sheet)
 ```
 
 `build-node-data.mjs` pulls Teamcraft's source JSON straight from the

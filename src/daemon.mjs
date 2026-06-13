@@ -33,7 +33,7 @@ const readData = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf-8"));
 
 let nodeDb, itemNames, monsterDb, mobNames, mapsIndex, fateDb, npcDb,
 	huntingLog, mobMaps, itemNodes, allItemNames, treasureDb, fishingDb,
-	vistaDb, aetherDb, npcRoles;
+	vistaDb, aetherDb, npcRoles, mapMarkerDb;
 
 // Newer layer files may not exist yet on a data/ built by an older checkout —
 // serve empty rather than crashing, so `npm run rebuild-data` can catch up.
@@ -58,6 +58,7 @@ function loadData() {
 	vistaDb = readDataOptional("vistas.json");
 	aetherDb = readDataOptional("aether-currents.json");
 	npcRoles = readDataOptional("npc-roles.json"); // { npcId: "q"|"s"|"qs" }
+	mapMarkerDb = readDataOptional("map-markers.json"); // labels/POIs/zone links, px coords
 }
 loadData();
 
@@ -229,6 +230,17 @@ const server = createServer(async (req, res) => {
 			...s,
 			fishes: s.fishes.map((f) => ({ id: f, name: itemNames[f] ?? allItemNames[f] ?? `#${f}` })),
 		}));
+		res.writeHead(200, { "Content-Type": "application/json" });
+		res.end(JSON.stringify(list));
+		return;
+	}
+	if (req.url.startsWith("/map-markers")) {
+		// In-game map markers: labels, POI icons, zone links (pixel coords).
+		// Attach the target map's display name to links so the UI can tooltip it.
+		const mapId = String(Number(new URL(req.url, "http://localhost").searchParams.get("map")));
+		const mapName = Object.fromEntries(mapsIndex.map((m) => [m.id, m.name]));
+		const list = (mapMarkerDb[mapId] ?? []).map((mk) =>
+			mk.type === 1 && mk.target ? { ...mk, targetName: mapName[mk.target] ?? mk.label } : mk);
 		res.writeHead(200, { "Content-Type": "application/json" });
 		res.end(JSON.stringify(list));
 		return;

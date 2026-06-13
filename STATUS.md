@@ -60,6 +60,7 @@ ffxiv_dx11.exe (Wine) ─ deucalion.dll ─ pipe ─ deucalion-bridge.exe ─ TC
 | Capture-status pill (live / no-capture / daemon down) | ⚠️ new, not tested against a real bridge drop |
 | Material search → jump + ring nodes (incl. fish) | ✅ endpoint verified (copper/anchovy); jump uses the live-verified node coords |
 | Icon-size sliders (per category, localStorage-persisted) | ✅ CSS-var driven; scales inner elements only (Leaflet owns the marker root transform) |
+| Map labels / POI icons / zone links (MapMarker sheet, 7096 markers) | ⚠️ data matches in-game Limsa screenshots; click-jump + render not yet eyeballed |
 | NPC role toggles (quest givers gold / vendors green) | ✅ live-verified in Limsa |
 | Player heading arrow (rotation) | ✅ live-verified vs in-game map arrow (Limsa, facing north) |
 
@@ -116,16 +117,14 @@ See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
    the game. Per the research: Electron BrowserWindow {transparent, frame:
    false, alwaysOnTop} + setIgnoreMouseEvents; works over fullscreen-windowed
    FFXIV. Tauri rejected (macOS transparency = private API + open bugs).
-7. **Map labels** — place-name text on the map (toggleable), like the in-game
-   map. Likely source: the game's MapMarker sheet via XIVAPI v2 (drives the
-   in-game labels); needs probing — do NOT trust icon/type ids from memory.
-8. **Real icons for dots/markers** — replace the colored npc/mob dots and
-   emoji pins with in-game icons (already have the v2 asset endpoint pattern;
-   MapMarker rows carry icon ids per POI type).
-9. **Zone links** — clickable exit markers at zone borders that jump to the
-   adjacent map (MapMarker map-link entries carry the target map id).
-10. **Specialty-location markers** — materia melder, repairs, company chest,
-    market boards, aetherytes (TC aetherytes.json exists too), summoning
-    bells, chocobokeep, gatekeeper, guilds, grand companies. Mostly MapMarker
-    rows with their in-game icons; one build extract likely covers 7/9/10 and
-    feeds 8.
+7. ~~Map labels~~ / ~~zone links~~ / ~~specialty POIs~~ — DONE 2026-06-12 via
+   the MapMarker sheet (build-map-markers.mjs: 7096 markers, 823 maps).
+   Labels render in-game style, zone links click-jump, POIs use the real
+   game icons (aetherytes, bells, market boards, guilds, repairs, …).
+   MapMarker sheet facts: subrow per marker, X/Y are 2048-image PIXELS,
+   DataType 0 plain / 1 map link (DataKey = target map) / 3 aetheryte /
+   4 aethernet; `rows=` param only returns subrow 0 — walk with
+   `after=row:subrow` cursor.
+8. **Real icons for the remaining dots** — npc/mob dots and the emoji pins
+   (vista 🔭, current 🌀, treasure ❌) could also use game icons now that
+   iconAsset() handles any icon folder. POIs already use real icons.

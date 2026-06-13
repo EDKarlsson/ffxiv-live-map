@@ -52,6 +52,17 @@
 	}
 	.fate-icon img { --sz: var(--sz-fate, 1); }
 	.fish-icon img { --sz: var(--sz-fish, 1); }
+	.poi-icon img { --sz: var(--sz-poi, 1); }
+	/* In-game-style place labels. pre-line: PlaceNameSubtext uses \n for the
+	   "(Guild)" second line. Inner div self-centers so iconSize can be null. */
+	.map-label {
+		font: 600 calc(13px * var(--sz-maplabel, 1)) system-ui;
+		color: #fff; text-shadow: 0 0 3px #000, 0 1px 4px #000, 0 0 6px #000;
+		white-space: pre-line; text-align: center; pointer-events: none;
+		position: relative; translate: -50% -50%; width: max-content; max-width: 180px;
+	}
+	.map-label.zlink { color: #ffd470; pointer-events: auto; cursor: pointer; }
+	.map-label.zlink:hover { color: #ffe7ad; }
 	/* Active (up-now) timed node: spinning icon + pulsing glow behind it. */
 	.node-icon.node-up { overflow: visible; }
 	.node-icon.node-up img {
@@ -278,6 +289,13 @@ const ICONS = ["060438", "060437", "060433", "060432", "060445", "060465"];
 const TIMED_ICONS = ["060464", "060463", "060462", "060461", "060445", "060466"];
 // XIVAPI v2 asset endpoint (v1 /i/ hotlinks are deprecated)
 const gameIcon = (id) => `https://v2.xivapi.com/api/asset?path=ui/icon/060000/${id}.tex&format=png`;
+// Same, but for numeric icon ids in any folder (folder = id floored to 1000s —
+// e.g. 63919 lives in ui/icon/063000/, not 060000).
+const iconAsset = (id) => {
+	const s = String(id).padStart(6, "0");
+	const folder = String(Math.floor(id / 1000) * 1000).padStart(6, "0");
+	return `https://v2.xivapi.com/api/asset?path=ui/icon/${folder}/${s}.tex&format=png`;
+};
 const iconUrl = (n) => gameIcon((n.limited || n.spawns.length ? TIMED_ICONS : ICONS)[n.type]);
 
 const layers = {
@@ -290,8 +308,14 @@ const layers = {
 	npcs: L.layerGroup().addTo(map),
 	vistas: L.layerGroup(),
 	currents: L.layerGroup(),
+	maplabels: L.layerGroup().addTo(map),
+	pois: L.layerGroup().addTo(map),
+	zonelinks: L.layerGroup().addTo(map),
 };
 L.control.layers(null, {
+	"Map labels": layers.maplabels,
+	"Points of interest": layers.pois,
+	"Zone links": layers.zonelinks,
 	"Miner nodes": layers.min,
 	"Botanist nodes": layers.btn,
 	"Spearfishing nodes": layers.fsh,
@@ -528,6 +552,50 @@ async function loadNpcs(m) {
 	renderNpcRoles();
 }
 document.getElementById("npcSearch").oninput = renderNpcs;
+
+// --- In-game map markers: labels, POI icons, zone links (pixel coords) ------------
+async function loadMapMarkers(m) {
+	layers.maplabels.clearLayers();
+	layers.pois.clearLayers();
+	layers.zonelinks.clearLayers();
+	const mks = await fetch(`/map-markers?map=${m.id}`).then((r) => r.json());
+	const jumpTo = async (target) => {
+		setFollow(false);
+		const tm = await fetch(`/map?id=${target}`).then((r) => r.json());
+		if (tm) viewMap(tm);
+	};
+	for (const mk of mks) {
+		const ll = px2ll(mk.x, mk.y);
+		if (mk.type === 1 && mk.target) {
+			// Zone link — click jumps to the adjacent/linked map.
+			const name = mk.targetName ?? mk.label ?? "linked map";
+			const icon = mk.icon
+				? L.divIcon({ className: "node-icon poi-icon", html: `<img src="${iconAsset(mk.icon)}">`, iconSize: [24, 24], iconAnchor: [12, 12] })
+				: L.divIcon({ className: "", html: `<div class="map-label zlink">⮕ ${mk.label || name}</div>`, iconSize: null });
+			const lm = L.marker(ll, { icon }).bindTooltip(`Go to ${name}`);
+			lm.on("click", () => jumpTo(mk.target));
+			layers.zonelinks.addLayer(lm);
+			continue;
+		}
+		// POI icon (aetherytes type 3, aethernet 4, everything else 0)
+		if (mk.icon) {
+			const kind = mk.type === 3 ? "Aetheryte" : mk.type === 4 ? "Aethernet shard" : "";
+			const pm = L.marker(ll, {
+				icon: L.divIcon({ className: "node-icon poi-icon", html: `<img src="${iconAsset(mk.icon)}">`, iconSize: [24, 24], iconAnchor: [12, 12] }),
+				interactive: !!(mk.label || kind),
+			});
+			if (mk.label || kind) pm.bindTooltip([mk.label.split("\n")[0], kind].filter(Boolean).join(" — "));
+			layers.pois.addLayer(pm);
+		}
+		// Text label (offset below when it shares the spot with an icon)
+		if (mk.label) {
+			layers.maplabels.addLayer(L.marker(ll, {
+				icon: L.divIcon({ className: "", html: `<div class="map-label" ${mk.icon ? 'style="translate:-50% 8px"' : ""}>${mk.label}</div>`, iconSize: null }),
+				interactive: false,
+			}));
+		}
+	}
+}
 
 // --- Fishing holes (fishing-log spots; coords already in-game map coords) --------
 async function loadFishing(m) {
@@ -982,6 +1050,8 @@ map.on("click", async (e) => {
 // Sliders set --sz-* on :root; the marker CSS scales inner elements live, so
 // nothing needs re-rendering. Stored in localStorage.
 const SIZE_CATS = [
+	["maplabel", "Map labels"],
+	["poi", "Map POIs"],
 	["node", "Gathering nodes"],
 	["fish", "Fishing holes"],
 	["fate", "FATEs"],
@@ -1091,6 +1161,7 @@ function viewMap(m) {
 	loadFates(m).catch((e) => console.error("loadFates failed:", e));
 	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
 	loadFishing(m).catch((e) => console.error("loadFishing failed:", e));
+	loadMapMarkers(m).catch((e) => console.error("loadMapMarkers failed:", e));
 	loadTreasures(m).catch((e) => console.error("loadTreasures failed:", e));
 	loadVistas(m).catch((e) => console.error("loadVistas failed:", e));
 	loadCurrents(m).catch((e) => console.error("loadCurrents failed:", e));

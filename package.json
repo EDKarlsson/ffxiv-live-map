@@ -5,7 +5,7 @@
 	"type": "module",
 	"main": "src/daemon.mjs",
 	"scripts": {
-		"build-data": "node scripts/build-node-data.mjs && node scripts/build-hunting-log.mjs && node scripts/build-extra-layers.mjs",
+		"build-data": "node scripts/build-node-data.mjs && node scripts/build-hunting-log.mjs && node scripts/build-extra-layers.mjs && node scripts/build-map-markers.mjs",
 		"rebuild-data": "node scripts/ensure-data.mjs --force",
 		"prestart": "node scripts/ensure-data.mjs",
 		"prestart:own-bridge": "node scripts/ensure-data.mjs",

@@ -19,7 +19,7 @@ const force = process.argv.includes("--force");
 // Sentinels — one per build script. If any is missing, (re)build everything.
 // treasures.json covers the build-node-data additions (treasure + fishing);
 // vistas.json covers build-extra-layers (vistas + aether currents).
-const needed = ["nodes.json", "maps.json", "hunting-log.json", "treasures.json", "vistas.json", "npc-roles.json"];
+const needed = ["nodes.json", "maps.json", "hunting-log.json", "treasures.json", "vistas.json", "npc-roles.json", "map-markers.json"];
 const missing = needed.filter((f) => !existsSync(join(DATA, f)));
 
 if (!force && missing.length === 0) {
@@ -27,7 +27,7 @@ if (!force && missing.length === 0) {
 }
 
 console.log(force ? "[ensure-data] forced rebuild…" : `[ensure-data] building data (missing: ${missing.join(", ")})…`);
-for (const script of ["build-node-data.mjs", "build-hunting-log.mjs", "build-extra-layers.mjs"]) {
+for (const script of ["build-node-data.mjs", "build-hunting-log.mjs", "build-extra-layers.mjs", "build-map-markers.mjs"]) {
 	const r = spawnSync(process.execPath, [join(__dirname, script)], { stdio: "inherit" });
 	if (r.status !== 0) {
 		console.error(`[ensure-data] ${script} failed (exit ${r.status}).`);
