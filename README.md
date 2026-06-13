@@ -84,41 +84,54 @@ Map images come from xivapi (2048×2048 jpg, URL included per map entry).
 
 ## Running
 
-Prereqs: Node ≥ 18, FFXIV running, **Teamcraft desktop with Packet Capture
-enabled** (its bridge listens on TCP 31594).
+**Prereqs:** Node ≥ 18, FFXIV running, and **FFXIV Teamcraft desktop with
+Packet Capture enabled** — Teamcraft injects Deucalion (the packet-capture DLL)
+into the game, and this app attaches to it.
 
 ```sh
 npm install
-npm start            # daemon on http://localhost:8787, bridge port 31594
+npm start
 ```
 
-On first run, `npm start` builds the bundled data under `data/` (fetched from
-the Teamcraft GitHub repo + XIVAPI v2; takes ~20s, then cached). The `data/`
-dir is gitignored — it's derived, not source. Force a rebuild after a game
-patch with `npm run rebuild-data`. The daemon hot-reloads data when those files
-change, so a rebuild doesn't need a restart.
+`npm start` does the whole thing: builds the bundled data on first run, starts a
+Deucalion bridge, launches the daemon, and opens the map in your browser at
+<http://localhost:8787>. Leave it running and move around in game to see your
+dot; press **Ctrl+C** to stop the daemon and the bridge together.
 
-Open <http://localhost:8787>, then change zones or move in game.
+> An always-on-top overlay (Electron) is planned. Until then, `npm start` just
+> opens the map in your default browser.
 
-Flags: `--bridge-port <n>` (default 31594), `--http-port <n>` (default 8787),
-`--verbose`.
+### Why a second bridge?
 
-### Running alongside Teamcraft (required)
+Teamcraft's own bridge (TCP **31594**) accepts exactly one client — once
+Teamcraft connects, nothing else can attach there (verified with `lsof`: no
+LISTEN socket is left on 31594). Deucalion's named pipe *does* allow multiple
+subscribers, so `npm start` launches a **second** bridge on TCP **31595** and
+points the daemon at it. `scripts/start-bridge.sh` mirrors Teamcraft's own
+launch — XIV on Mac's wine + prefix, the `WINE*SYNC` env, and the
+`deucalion-bridge.exe` / `deucalion.dll` from inside the Teamcraft app bundle.
+Re-injection is harmless: the DLL is already loaded, the bridge just attaches a
+new pipe subscriber.
 
-**Confirmed 2026-06-12:** Teamcraft's bridge accepts exactly one client — after
-Teamcraft connects there is no LISTEN socket left on 31594 (verified with
-`lsof`). Deucalion's named pipe *does* support multiple subscribers, so run a
-second bridge on its own port:
+### Data
+
+The bundled JSON under `data/` is built on first run from the Teamcraft GitHub
+repo + XIVAPI v2 (~20s, then cached). It's gitignored — derived, not source.
+Force a rebuild after a game patch with `npm run rebuild-data`; the daemon
+hot-reloads `data/` on change, so a rebuild doesn't need a restart.
+
+### Manual / advanced
+
+To run the pieces yourself (e.g. a custom port, or to watch the bridge logs),
+use two terminals:
 
 ```sh
-scripts/start-bridge.sh           # spawns bridge on 31595 (keep it running)
-npm run start:own-bridge          # daemon with --bridge-port 31595
+npm run bridge            # 2nd Deucalion bridge on :31595 (keep it running)
+npm run start:own-bridge  # daemon on :8787, --bridge-port 31595
 ```
 
-The script mirrors Teamcraft's own launch (XIV on Mac wine + prefix,
-WINEESYNC/WINEMSYNC/WINEFSYNC env) and finds the bridge exe / deucalion.dll
-inside the Teamcraft app bundle. Re-injection is harmless: the DLL is already
-loaded, the bridge just attaches a new pipe subscriber.
+Daemon flags: `--bridge-port <n>` (daemon default 31594; `npm start` uses
+31595), `--http-port <n>` (default 8787), `--verbose`.
 
 ## Layers & features
 
