@@ -116,6 +116,9 @@ loaded, the bridge just attaches a new pipe subscriber.
 - [x] Vistas — full Sightseeing Log with ET windows, emote, open-now status
 - [x] Aether currents — field-current markers + quest lists (HW+ zones)
 - [x] Material search — find any gatherable item (incl. fish), click to jump + ring its nodes
+- [x] NPC role toggles — quest givers (gold) and vendors (green)
+- [x] Player heading arrow — dot shows facing direction from packet rotation
+- [x] Per-category icon-size sliders (persisted)
 
 ## Data build
 

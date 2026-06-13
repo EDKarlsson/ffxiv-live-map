@@ -60,6 +60,8 @@ ffxiv_dx11.exe (Wine) ─ deucalion.dll ─ pipe ─ deucalion-bridge.exe ─ TC
 | Capture-status pill (live / no-capture / daemon down) | ⚠️ new, not tested against a real bridge drop |
 | Material search → jump + ring nodes (incl. fish) | ✅ endpoint verified (copper/anchovy); jump uses the live-verified node coords |
 | Icon-size sliders (per category, localStorage-persisted) | ✅ CSS-var driven; scales inner elements only (Leaflet owns the marker root transform) |
+| NPC role toggles (quest givers gold / vendors green) | ⚠️ data verified (fisher-guild NPCs flagged in Limsa), not in-game checked |
+| Player heading arrow (rotation) | ⚠️ uses Teamcraft's mappy formula ((rot−π)×−1); needs in-game direction check |
 
 See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
 
@@ -97,7 +99,8 @@ See `VERIFICATION.md` for the in-game checklist of the ⚠️ items.
 
 1. **In-game verification pass** of the ⚠️ features (VERIFICATION.md) —
    now includes the four new layers + a bridge-drop test of the status pill.
-2. **Rotation** — captured but not rendered (could orient the player dot).
+2. ~~Rotation~~ — DONE 2026-06-12: heading arrow on the player dot, Teamcraft
+   mappy formula. Verify in-game that the arrow matches facing.
 3. **Open-source polish before sharing with Teamcraft devs:** LICENSE file,
    screenshots in README, confirm no personal data in repo (checked: none —
    character/list IDs live only in the guide project). Be upfront that live

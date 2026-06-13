@@ -34,6 +34,15 @@
 		width: calc(14px * var(--sz-player, 1)); height: calc(14px * var(--sz-player, 1)); border-radius: 50%;
 		background: #4da3ff; border: 2px solid #fff; box-shadow: 0 0 8px #4da3ff;
 		position: relative; left: 50%; top: 50%; translate: -50% -50%;
+		/* JS sets `rotate:` from packet rotation (Teamcraft mappy formula:
+		   (rotation − π) × −1). The `rotate` property composes with `translate`
+		   without fighting Leaflet's transform on the marker root. */
+	}
+	.player-dot::after { /* heading arrow, points up at rotate:0 */
+		content: ""; position: absolute; left: 50%; top: -9px; translate: -50% 0;
+		border-left: 4px solid transparent; border-right: 4px solid transparent;
+		border-bottom: 8px solid #fff;
+		filter: drop-shadow(0 0 2px rgba(0,0,0,.6));
 	}
 	.node-icon img {
 		--sz: var(--sz-node, 1);
@@ -1089,21 +1098,31 @@ function viewMap(m) {
 }
 
 // --- Player position ------------------------------------------------------------
+let lastRot = null;
+
+function applyRotation() {
+	// Same conversion Teamcraft's mappy uses: css = (rotation - PI) * -1 rad.
+	const dot = marker?.getElement()?.querySelector(".player-dot");
+	if (dot && lastRot !== null) dot.style.rotate = `${(lastRot - Math.PI) * -1}rad`;
+}
+
 function refreshMarker() {
 	const onViewed = lastPos && playerMap && viewedMap && playerMap.id === viewedMap.id;
 	if (!onViewed) { marker?.remove(); marker = null; return; }
 	const ll = px2ll(lastPos.pixelX, lastPos.pixelY);
 	if (!marker) {
 		// Inner div (not className on the root): Leaflet owns the root's
-		// transform, so size scaling must live one level down.
+		// transform, so size scaling/rotation must live one level down.
 		marker = L.marker(ll, { icon: L.divIcon({ className: "", html: `<div class="player-dot"></div>`, iconSize: [14, 14] }) }).addTo(map);
 	} else {
 		marker.setLatLng(ll);
 	}
+	applyRotation();
 }
 
-function setPos(p) {
+function setPos(p, rot) {
 	lastPos = p;
+	if (rot !== undefined && rot !== null) lastRot = rot;
 	refreshMarker();
 	document.getElementById("coords").textContent = `X: ${p.mapX.toFixed(1)}  Y: ${p.mapY.toFixed(1)}`;
 }
@@ -1140,11 +1159,11 @@ function connect() {
 			captureUp = !!msg.state.connected;
 			renderStatus();
 			if (msg.state.map) handleZone(msg.state.map);
-			if (msg.state.pos) setPos(msg.state.pos);
+			if (msg.state.pos) setPos(msg.state.pos, msg.state.rotation);
 		} else if (msg.type === "zone") {
 			handleZone(msg.map);
 		} else if (msg.type === "pos") {
-			setPos(msg.pos);
+			setPos(msg.pos, msg.rotation);
 		} else if (msg.type === "connected" || msg.type === "disconnected") {
 			captureUp = msg.type === "connected";
 			renderStatus();

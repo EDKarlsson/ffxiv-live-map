@@ -59,6 +59,11 @@ start:own-bridge`), map open at http://localhost:8787.
 - **Status pill**: with everything live, kill the bridge terminal — pill should
   flip to "no packet capture" within seconds; restart the bridge — it should
   return to "live" on its own (reconnect loop), no daemon restart.
+- **Heading arrow**: face north on the in-game compass — the white arrow on
+  your dot should point up; face east — arrow points right. (Formula is
+  Teamcraft's mappy transform; if it's mirrored/offset, note which way.)
+- **NPC roles**: tick "Quest givers" in Limsa Lower Decks — gold dots should
+  sit on the guild receptionists (e.g. Wawalago's spot on the fisher pier).
 
 ### 5. "What's up now" → live ET
 - Set Job + level cap to something you can reach; toggle "Only show up now".
