@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
 
 // Characterization / integration suite. Boots the real daemon with --no-capture
 // (HTTP + WebSocket, no packet-capture stack) on an ephemeral port and asserts
@@ -26,14 +27,17 @@ let proc, base;
 beforeAll(async () => {
 	const port = await freePort();
 	base = `http://127.0.0.1:${port}`;
+	let stderr = "";
 	proc = spawn(process.execPath, [join(root, "src/daemon.mjs"), "--no-capture", "--http-port", String(port)], {
 		cwd: root,
-		stdio: "ignore",
+		stdio: ["ignore", "ignore", "pipe"], // capture stderr so a boot failure is diagnosable
 	});
+	proc.stderr.on("data", (d) => { stderr += d; });
 	const deadline = Date.now() + 20000;
 	for (;;) {
+		if (proc.exitCode !== null) throw new Error(`daemon exited early (code ${proc.exitCode}):\n${stderr}`);
 		try { if ((await fetch(`${base}/maps`)).ok) break; } catch { /* not up yet */ }
-		if (Date.now() > deadline) throw new Error("daemon did not start serving /maps in time");
+		if (Date.now() > deadline) throw new Error(`daemon did not serve /maps within 20s:\n${stderr}`);
 		await new Promise((r) => setTimeout(r, 200));
 	}
 }, 30000);
@@ -59,11 +63,14 @@ describe("daemon HTTP endpoints (characterization)", () => {
 	});
 
 	it("GET /nodes?map= -> array; items resolved to {id,name}", async () => {
-		const maps = await json("/maps");
-		let nodes = [];
-		for (const m of maps.slice(0, 60)) { nodes = await json(`/nodes?map=${m.id}`); if (nodes.length) break; }
+		// globalSetup guarantees data/nodes.json exists — read it to pick a map
+		// that has nodes, then make a single targeted request (no HTTP scanning).
+		const nodesDb = JSON.parse(readFileSync(join(root, "data/nodes.json"), "utf-8"));
+		const mapId = Object.values(nodesDb).find((n) => n.map)?.map;
+		expect(mapId).toBeTruthy();
+		const nodes = await json(`/nodes?map=${mapId}`);
 		expect(Array.isArray(nodes)).toBe(true);
-		expect(nodes.length).toBeGreaterThan(0); // at least one ARR map has nodes
+		expect(nodes.length).toBeGreaterThan(0);
 		expect(Array.isArray(nodes[0].items)).toBe(true);
 		expect(nodes[0].items[0]).toHaveProperty("name");
 	});

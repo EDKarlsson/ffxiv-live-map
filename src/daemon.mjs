@@ -411,21 +411,25 @@ server.listen(HTTP_PORT, () => {
 if (MOCK) {
 	const zoneId = Number(argVal("--mock-zone", 129)); // 129 = Limsa Lominsa Lower Decks
 	const map = mapForTerritory(zoneId) ?? mapsIndex[0];
-	state.map = map;
-	state.connected = true;
-	console.log(`[mock] synthetic character in ${map ? map.image : "?"} (zone ${zoneId}) — pass --mock-zone <id> to change.`);
-	broadcast({ type: "zone", map });
-	broadcast({ type: "connected" });
-	let t = 0;
-	setInterval(() => {
-		t += 0.08;
-		// pos.x = E-W, pos.z = N-S drive the map plane; pos.y is altitude (ignored).
-		const raw = { x: 100 * Math.cos(t), y: 0, z: 100 * Math.sin(t) };
-		state.pos = convertPosition(raw, state.map);
-		state.rotation = t % (Math.PI * 2);
-		broadcast({ type: "pos", pos: state.pos, rotation: state.rotation });
-		persistState();
-	}, 500);
+	if (!map) {
+		console.warn(`[mock] no map found for zone ${zoneId} (is data/ built?) — mock idle.`);
+	} else {
+		state.map = map;
+		state.connected = true;
+		console.log(`[mock] synthetic character in ${map.image} (zone ${zoneId}) — pass --mock-zone <id> to change.`);
+		broadcast({ type: "zone", map });
+		broadcast({ type: "connected" });
+		let t = 0;
+		setInterval(() => {
+			t += 0.08;
+			// pos.x = E-W, pos.z = N-S drive the map plane; pos.y is altitude (ignored).
+			const raw = { x: 100 * Math.cos(t), y: 0, z: 100 * Math.sin(t) };
+			state.pos = convertPosition(raw, state.map);
+			state.rotation = t % (Math.PI * 2);
+			broadcast({ type: "pos", pos: state.pos, rotation: state.rotation });
+			persistState();
+		}, 500);
+	}
 }
 
 // --- Packet capture -----------------------------------------------------------
