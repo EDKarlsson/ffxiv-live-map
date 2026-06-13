@@ -480,12 +480,18 @@ let npcData = [];
 const npcRoleLayer = L.layerGroup().addTo(map);
 
 function npcMarker(n, cls = "") {
+	// Wiki pages are name-keyed (spaces -> underscores; apostrophes pass
+	// through fine, e.g. N'nmulika — verified 2026-06-12). Not every generic
+	// NPC has a page, but quest givers/vendors essentially always do.
+	const wiki = `https://ffxiv.consolegameswiki.com/wiki/${encodeURIComponent(n.name.replace(/ /g, "_"))}`;
 	return L.marker(coordLL(n.x, n.y), {
 		icon: L.divIcon({ className: "", html: `<div class="npc-dot ${cls}"></div>`, iconSize: [12, 12], iconAnchor: [6, 6] }),
 	}).bindTooltip(`${n.name}${n.title ? ` — ${n.title}` : ""}`)
 		.bindPopup(`<b>${n.name}</b>${n.title ? ` <span class="nlvl">${n.title}</span>` : ""}<br>` +
 			`<span class="nlvl">(${n.x}, ${n.y})${n.role ? ` · ${n.role.includes("q") ? "quest giver " : ""}${n.role.includes("s") ? "vendor" : ""}` : ""}</span><br>` +
-			`<a href="https://ffxivteamcraft.com/db/en/npc/${n.id}" target="_blank">Teamcraft DB</a>`);
+			`<a href="${wiki}" target="_blank">Wiki</a> · ` +
+			`<a href="https://ffxivteamcraft.com/db/en/npc/${n.id}" target="_blank">Teamcraft DB</a> · ` +
+			`<a href="https://www.garlandtools.org/db/#npc/${n.id}" target="_blank">GarlandTools</a>`);
 }
 
 function renderNpcs() {
