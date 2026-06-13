@@ -282,6 +282,11 @@ map.getPane("basemap").style.zIndex = 250;
 map.createPane("vectors");
 map.getPane("vectors").style.zIndex = 450;
 const vectorRenderer = L.svg({ pane: "vectors" });
+// Dedicated top pane for the player dot so it's always above every node, label,
+// POI and NPC marker (those all share Leaflet's default markerPane, z-index 600).
+// Sits above markers + their hover tooltips (650), just below click popups (700).
+map.createPane("player");
+map.getPane("player").style.zIndex = 680;
 
 let overlay = null;
 let marker = null;
@@ -1316,7 +1321,7 @@ function refreshMarker() {
 	if (!marker) {
 		// Inner div (not className on the root): Leaflet owns the root's
 		// transform, so size scaling/rotation must live one level down.
-		marker = L.marker(ll, { icon: L.divIcon({ className: "", html: `<div class="player-dot"></div>`, iconSize: [14, 14] }) })
+		marker = L.marker(ll, { pane: "player", icon: L.divIcon({ className: "", html: `<div class="player-dot"></div>`, iconSize: [14, 14] }) })
 			.bindTooltip("You — click to zoom in")
 			.on("click", () => map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 2)))
 			.addTo(map);
