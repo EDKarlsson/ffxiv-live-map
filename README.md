@@ -98,8 +98,13 @@ Deucalion bridge, launches the daemon, and opens the map in your browser at
 <http://localhost:8787>. Leave it running and move around in game to see your
 dot; press **Ctrl+C** to stop the daemon and the bridge together.
 
-> An always-on-top overlay (Electron) is planned. Until then, `npm start` just
-> opens the map in your default browser.
+### Desktop app (experimental)
+
+`npm run app` runs the whole stack inside an Electron window instead of a
+browser tab — it starts the bridge + daemon for you and opens the map. Run
+`npm install` once first to fetch Electron. A frameless, always-on-top,
+click-through overlay over the game is the next step; for now it's a normal
+resizable window.
 
 ### Why a second bridge?
 
