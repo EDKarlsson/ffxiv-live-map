@@ -1,0 +1,38 @@
+name: tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # The tests exercise the daemon (HTTP + coords) and the frontend logic —
+      # none of which need the Electron binary, so skip its ~100 MB download.
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Derived data/ is built on first run from the Teamcraft GitHub repo +
+      # XIVAPI (~20s). Cache it (keyed on the build scripts) so most runs skip
+      # the fetch; on a miss the test globalSetup rebuilds it.
+      - name: Cache derived data
+        uses: actions/cache@v4
+        with:
+          path: |
+            data
+            scripts/.tc-cache
+          key: ffxiv-data-${{ hashFiles('scripts/build-*.mjs', 'scripts/tc-data-source.mjs') }}
+
+      - name: Run tests
+        run: npm test
