@@ -74,7 +74,8 @@ watch(DATA_DIR, () => {
 });
 
 // User-placed custom markers, persisted to disk: { mapId: [ {id, x, y, label, color} ] }
-const MARKERS_FILE = join(__dirname, "../custom-markers.json");
+// Env override (FFXIV_MARKERS_FILE) keeps tests/CI off the user's real markers file.
+const MARKERS_FILE = process.env.FFXIV_MARKERS_FILE || join(__dirname, "../custom-markers.json");
 let customMarkers = {};
 try {
 	if (existsSync(MARKERS_FILE)) customMarkers = JSON.parse(readFileSync(MARKERS_FILE, "utf-8"));
@@ -427,7 +428,8 @@ if (MOCK) {
 			state.pos = convertPosition(raw, state.map);
 			state.rotation = t % (Math.PI * 2);
 			broadcast({ type: "pos", pos: state.pos, rotation: state.rotation });
-			persistState();
+			// No persistState() here: the mock is ephemeral and must not clobber the
+			// user's real .state.json with synthetic coordinates.
 		}, 500);
 	}
 }

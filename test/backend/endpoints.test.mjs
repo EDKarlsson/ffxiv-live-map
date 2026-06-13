@@ -3,7 +3,8 @@ import { spawn } from "node:child_process";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 // Characterization / integration suite. Boots the real daemon with --no-capture
 // (HTTP + WebSocket, no packet-capture stack) on an ephemeral port and asserts
@@ -22,14 +23,18 @@ function freePort() {
 	});
 }
 
-let proc, base;
+let proc, base, markersFile;
 
 beforeAll(async () => {
 	const port = await freePort();
 	base = `http://127.0.0.1:${port}`;
+	// Point the daemon's custom-markers store at a throwaway temp file so the
+	// /custom round-trip never touches the developer's real custom-markers.json.
+	markersFile = join(tmpdir(), `ffxiv-test-markers-${port}.json`);
 	let stderr = "";
 	proc = spawn(process.execPath, [join(root, "src/daemon.mjs"), "--no-capture", "--http-port", String(port)], {
 		cwd: root,
+		env: { ...process.env, FFXIV_MARKERS_FILE: markersFile },
 		stdio: ["ignore", "ignore", "pipe"], // capture stderr so a boot failure is diagnosable
 	});
 	proc.stderr.on("data", (d) => { stderr += d; });
@@ -42,7 +47,10 @@ beforeAll(async () => {
 	}
 }, 30000);
 
-afterAll(() => { proc?.kill(); });
+afterAll(() => {
+	proc?.kill();
+	try { if (markersFile) unlinkSync(markersFile); } catch { /* never created — fine */ }
+});
 
 const json = (path) => fetch(`${base}${path}`).then((r) => r.json());
 
