@@ -1,7 +1,10 @@
 import { map } from "./map.js";
 
 // Toggleable Leaflet layer groups + the layer control. Layer modules add their
-// markers into these; the control (bottom-right) lets the user toggle each.
+// markers into these; the control lets the user toggle each. It lives top-left,
+// stacked under the zoom control: the right side is the HUD's (which would cover
+// a bottom-right control — the bug this placement fixes), and the bottom-left
+// holds the status pill, so top-left is the only corner clear of both.
 export const layers = {
 	min: L.layerGroup().addTo(map),
 	btn: L.layerGroup().addTo(map),
@@ -29,4 +32,4 @@ L.control.layers(null, {
 	"FATEs": layers.fates,
 	"Vistas": layers.vistas,
 	"Aether currents": layers.currents,
-}, { collapsed: false, position: "bottomright" }).addTo(map);
+}, { collapsed: false, position: "topleft" }).addTo(map);
