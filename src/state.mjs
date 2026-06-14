@@ -7,7 +7,11 @@ export const state = {
 	map: null, // current map entry from maps.json
 	pos: null, // last converted position
 	rotation: null,
-	connected: false,
+	// Capture link status, surfaced to the UI status pill. Set via capture.mjs
+	// setCaptureMode(). Starts in "browse" (no capture) — the daemon's run mode
+	// (default capture / --browse / --mock) decides whether to leave it there.
+	//   "browse" | "connecting" | "live"
+	capture: "browse",
 };
 
 // Persist last zone/position so a daemon restart doesn't need a zone change to

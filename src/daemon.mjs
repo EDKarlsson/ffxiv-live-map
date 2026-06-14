@@ -8,17 +8,18 @@
  *
  * Usage:
  *   node src/daemon.mjs [--bridge-port 31594] [--http-port 8787] [--verbose]
- *                       [--no-capture] [--mock [--mock-zone <id>]]
+ *                       [--no-capture] [--browse] [--mock [--mock-zone <id>]]
  *
  * Default bridge port 31594 = the port Teamcraft's bundled bridge listens on.
  */
 import { createServer } from "http";
-import { HTTP_PORT, BRIDGE_PORT, NO_CAPTURE, MOCK } from "./config.mjs";
+import { HTTP_PORT, BRIDGE_PORT, NO_CAPTURE, MOCK, BROWSE } from "./config.mjs";
 import "./data-store.mjs"; // load + watch derived data (side effect on import)
 import "./state.mjs";      // restore persisted zone/position (side effect on import)
 import { createRequestHandler } from "./router.mjs";
 import { attachWebSocket } from "./ws.mjs";
-import { startCapture } from "./capture.mjs";
+import { enableCapture, setCaptureMode } from "./capture.mjs";
+import { startGameMonitor } from "./game-monitor.mjs";
 import { startMock } from "./mock.mjs";
 
 const server = createServer(createRequestHandler());
@@ -27,7 +28,13 @@ server.listen(HTTP_PORT, () => {
 	console.log(`[map] UI on http://localhost:${HTTP_PORT} (bridge port ${BRIDGE_PORT})`);
 });
 
-// Run mode: a synthetic character (--mock), no capture at all (--no-capture, e.g.
-// tests/CI), or the real packet-capture stack (default).
+// Run mode:
+//   --mock        synthetic moving character (no real capture)
+//   --no-capture  inert browse: serve the map, never capture (tests/CI)
+//   --browse      browse by default, but watch for the game and auto-attach
+//                 capture when FFXIV launches (capture also toggleable via the UI)
+//   (default)     attach the real packet-capture stack immediately
 if (MOCK) startMock();
-else if (!NO_CAPTURE) startCapture();
+else if (NO_CAPTURE) setCaptureMode("browse");
+else if (BROWSE) { setCaptureMode("browse"); startGameMonitor(); }
+else enableCapture();

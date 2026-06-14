@@ -1,20 +1,26 @@
 /**
  * ffxiv-live-map — Electron shell (PR 1 of the mini-map overlay).
  *
- * This is the desktop wrapper: on launch it brings up the whole stack itself
- * (Deucalion bridge + daemon, the same pieces scripts/start.sh starts) and
+ * This is the desktop wrapper: on launch it brings up the daemon itself and
  * shows the existing Leaflet map in a normal window instead of a browser tab.
- * The transparent always-on-top overlay window is a follow-up PR.
+ *
+ * Browse-first: the daemon starts in browse mode and serves the map immediately
+ * with no packet capture, so the app is useful even when FFXIV isn't running
+ * (e.g. you're playing on PS5). The Deucalion bridge is started only while the
+ * game is up and stopped when it exits — so launching without the game no longer
+ * dead-ends on a "bridge never came up" error. The daemon's own game monitor
+ * attaches/detaches capture in lockstep.
  *
  * CommonJS on purpose: the package is "type": "module", but Electron's main
  * entry is simplest and most portable as .cjs. The daemon (ESM) runs unchanged
  * as a child process, so nothing in src/ has to change.
  *
- * Run: npm run app   (prereqs: FFXIV + Teamcraft with Packet Capture, like start.sh)
+ * Run: npm run app   (no prereqs — runs in browse mode; start FFXIV + Teamcraft
+ * with Packet Capture for live position)
  */
 
 const { app, BrowserWindow, dialog, shell } = require("electron");
-const { spawn } = require("node:child_process");
+const { spawn, execFile } = require("node:child_process");
 const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
@@ -36,6 +42,7 @@ const URL = `http://localhost:${HTTP_PORT}`;
 let bridge = null;
 let daemon = null;
 let win = null;
+let gameWatch = null; // interval that keeps the bridge in lockstep with the game
 let quitting = false; // set during teardown so child 'exit' handlers don't treat it as a crash
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -62,6 +69,64 @@ async function waitFor(check, { tries = 60, gap = 500 } = {}) {
 		await sleep(gap);
 	}
 	return false;
+}
+
+// FFXIV runs under Wine on macOS as ffxiv_dx11.exe. The bridge needs the game
+// (Wine + Teamcraft's Deucalion injection), so we tie the bridge's lifecycle to
+// the game's presence — no game means browse mode, no bridge, no error dialog.
+function gameRunning() {
+	return new Promise((resolve) => {
+		// execFile (no shell) — exit 0 with output = running; anything else (no
+		// match, or pgrep absent on non-macOS) = not running.
+		execFile("pgrep", ["-f", "ffxiv_dx11.exe"], (err, stdout) => resolve(!err && stdout.trim().length > 0));
+	});
+}
+
+function startBridge() {
+	// macOS-only: start-bridge.sh hardcodes the XIV-on-Mac Wine paths. No-op if one
+	// is already tracked or we're off darwin.
+	if (bridge || process.platform !== "darwin") return;
+	// detached: the bash wrapper respawns `wine` in a loop, so it must lead its own
+	// process group — that's how killStack()/stopBridge() take the whole tree
+	// (bash + wine) down via a negative-PID signal instead of orphaning wine.
+	// Absolute /bin/bash + script path: a Finder-launched .app has a minimal PATH.
+	const child = spawn("/bin/bash", [path.join(ROOT, "scripts/start-bridge.sh"), String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
+	bridge = child;
+	child.on("error", (err) => { console.error(`[app] bridge spawn failed: ${err.message}`); });
+	child.on("exit", (code) => {
+		console.log(`[app] bridge exited (${code})`);
+		// Clear only if it's still the current handle — a late exit from a bridge we
+		// already replaced must not null out the new one.
+		if (bridge === child) bridge = null;
+	});
+}
+
+function stopBridge() {
+	if (!bridge) return;
+	try {
+		if (process.platform === "darwin") process.kill(-bridge.pid, "SIGTERM"); // whole group (bash + wine)
+		else bridge.kill();
+	} catch { /* already gone */ }
+	bridge = null;
+}
+
+// Keep the bridge in sync with the game: start it when FFXIV is up (so the
+// daemon's game monitor can attach capture), stop ours when the game exits. We
+// never touch a bridge we didn't spawn (e.g. one from start-bridge.sh).
+async function syncBridgeToGame() {
+	const running = await gameRunning();
+	if (running && !bridge && !(await tcpListening(BRIDGE_PORT))) {
+		console.log("[app] FFXIV detected — starting the Deucalion bridge.");
+		startBridge();
+	} else if (!running && bridge) {
+		console.log("[app] FFXIV not running — stopping the bridge (browse mode).");
+		stopBridge();
+	}
+}
+
+function startGameWatch() {
+	if (gameWatch) return;
+	gameWatch = setInterval(() => { syncBridgeToGame().catch(() => {}); }, 4000);
 }
 
 async function startStack() {
@@ -94,43 +159,15 @@ async function startStack() {
 		});
 	}
 
-	// 2. Deucalion bridge — start ours unless one is already listening. The
-	// script bails if FFXIV/Teamcraft aren't up, so the wait below will time out
-	// with a clear message in that case.
-	if (!(await tcpListening(BRIDGE_PORT))) {
-		// The bundled bridge is macOS-only — scripts/start-bridge.sh hardcodes the
-		// XIV-on-Mac wine paths. On other platforms `spawn("bash", …)` would ENOENT
-		// and the unhandled 'error' event would crash Electron, so only spawn on
-		// darwin; elsewhere the wait below fails with a clear "bridge never came up".
-		if (process.platform === "darwin") {
-			// detached: the bash wrapper respawns `wine` in a loop, so it must be its
-			// own process-group leader — the only way killStack() can take the whole
-			// tree (bash + wine) down later via a negative-PID signal, instead of
-			// orphaning the wine child still holding the TCP port. (Not unref'd: we
-			// keep tracking it so we can kill it on quit.)
-			// Absolute /bin/bash + absolute script path: a Finder-launched .app has a
-			// minimal PATH, so don't rely on `bash` being resolvable.
-			bridge = spawn("/bin/bash", [path.join(ROOT, "scripts/start-bridge.sh"), String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
-			bridge.on("error", (err) => { console.error(`[app] bridge spawn failed: ${err.message}`); });
-			bridge.on("exit", (code) => { console.log(`[app] bridge exited (${code})`); });
-		} else {
-			console.warn(`[app] auto-starting the bridge is macOS-only; start a Deucalion bridge on :${BRIDGE_PORT} yourself first.`);
-		}
-	}
-	if (!(await waitFor(() => tcpListening(BRIDGE_PORT)))) {
-		throw new Error(
-			`The Deucalion bridge never came up on :${BRIDGE_PORT}.\n\n` +
-			`Make sure FFXIV is running and FFXIV Teamcraft is open with Packet Capture enabled, then relaunch.`
-		);
-	}
-
-	// 3. Daemon — reuse one already serving (e.g. a running `npm start`), else
-	// spawn it. We waited for the bridge first so the daemon's initial connect
-	// succeeds (it exits if that first connect fails).
+	// 2. Daemon first, in browse mode. It serves the map immediately with no
+	// bridge, so the app is usable even when FFXIV isn't running (e.g. playing on
+	// PS5). The daemon's own game monitor attaches/detaches packet capture as the
+	// game starts/stops; the bridge is kept in lockstep in step 3. Reuse one
+	// already serving (e.g. a running `npm start`) rather than spawning a second.
 	if (await httpOk(`${URL}/maps`)) {
 		console.log(`[app] reusing daemon already serving on ${URL}`);
 	} else {
-		daemon = spawn(process.execPath, [path.join(ROOT, "src/daemon.mjs"), "--bridge-port", String(BRIDGE_PORT), "--http-port", String(HTTP_PORT)], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
+		daemon = spawn(process.execPath, [path.join(ROOT, "src/daemon.mjs"), "--browse", "--bridge-port", String(BRIDGE_PORT), "--http-port", String(HTTP_PORT)], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
 		daemon.on("exit", (code) => {
 			console.log(`[app] daemon exited (${code})`);
 			// A crash after startup (port conflict, runtime error) would otherwise
@@ -146,6 +183,12 @@ async function startStack() {
 			throw new Error(`The daemon did not start serving on ${URL}.`);
 		}
 	}
+
+	// 3. Bridge follows the game. Start it now if FFXIV is already up, then poll to
+	// track it starting/stopping. No "bridge never came up" timeout any more —
+	// without the game we simply stay in browse mode.
+	await syncBridgeToGame();
+	startGameWatch();
 }
 
 function createWindow() {
@@ -186,6 +229,7 @@ function createWindow() {
 
 function killStack() {
 	quitting = true;
+	if (gameWatch) { clearInterval(gameWatch); gameWatch = null; }
 	// The daemon is a lone node process, so child.kill() reaps it cleanly. The
 	// bridge is a bash wrapper that respawns `wine` in a loop — killing only bash
 	// orphans the wine child, which keeps holding the TCP port. The bridge is only

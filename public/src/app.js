@@ -16,6 +16,8 @@ import { listImport } from "./features/list-import.js";
 import { initCustomMarkers } from "./features/custom-markers.js";
 import { applySizes, buildSizePanel, resetSizes } from "./features/icon-sizes.js";
 import { buildPicker } from "./features/map-picker.js";
+import { initCaptureToggle } from "./features/capture-toggle.js";
+import { initManualPosition } from "./features/manual-position.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -41,6 +43,8 @@ keepZoomBox.onchange = () => localStorage.setItem("keepZoom", keepZoomBox.checke
 
 // --- init panels + timers -----------------------------------------------------
 initCustomMarkers();
+initCaptureToggle();   // wire the browse/capture toggle before connect() (first WS state msg renders it)
+initManualPosition();  // "set position on click" for browse mode
 applySizes();
 buildSizePanel();
 setInterval(tick, 1000);       // ET clock + timed-node panel

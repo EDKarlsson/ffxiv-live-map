@@ -7,6 +7,18 @@ import { BRIDGE_PORT, VERBOSE } from "./config.mjs";
 const { CaptureInterface } = pcap;
 const WANTED = new Set(["updatePositionHandler", "updatePositionInstance", "initZone", "playerSpawn"]);
 
+// Capture link status is the single source of truth for the UI status pill.
+// Setting it broadcasts so the pill updates the instant the link changes:
+//   "browse"     — not capturing (intentional: no game / PS5 reference mode)
+//   "connecting" — capture stack up, trying to reach the Deucalion bridge
+//   "live"       — connected and receiving position packets
+export function setCaptureMode(mode) {
+	if (state.capture === mode) return;
+	state.capture = mode;
+	broadcast({ type: "capture", mode });
+}
+export const captureMode = () => state.capture;
+
 function handlePosition(pos, rotation) {
 	if (!state.map) return;
 	state.pos = convertPosition(pos, state.map);
@@ -20,10 +32,16 @@ function handlePosition(pos, rotation) {
 	}
 }
 
-// Subscribe to FFXIV packets via the Deucalion TCP bridge and push zone/position
-// updates to the UI. Returns the CaptureInterface.
-export function startCapture() {
-	const ci = new CaptureInterface({
+// The live CaptureInterface, or null when we're in browse mode (not capturing).
+// Capture is now a runtime concern — enable/disable on demand (a UI toggle) and
+// the game monitor auto-attaches/detaches as FFXIV starts/stops — so the stack
+// is built and torn down here rather than once at boot.
+let ci = null;
+let intentionalStop = false; // set by disableCapture so 'stopped' skips reconnect
+let reconnecting = false;
+
+function buildCi() {
+	return new CaptureInterface({
 		region: "Global",
 		bridgeTcpPort: BRIDGE_PORT,
 		filter: (_header, typeName) => WANTED.has(typeName),
@@ -34,7 +52,39 @@ export function startCapture() {
 			if (VERBOSE || important) console[p.type === "log" ? "info" : p.type](`[pcap] ${p.message}`);
 		},
 	});
+}
 
+// Connect (or reconnect) the current interface, backing off 2s -> 10s until the
+// bridge answers. A single attempt used to leave the daemon permanently deaf
+// when the bridge was down for more than ~2s; an initial-connect failure used to
+// exit the process. Capture is optional now, so we keep retrying instead — the
+// map stays usable as a browse view meanwhile, and capture attaches when the
+// bridge appears. Aborts if capture was disabled (ci nulled / intentionalStop).
+function scheduleReconnect() {
+	if (intentionalStop) { intentionalStop = false; setCaptureMode("browse"); return; }
+	setCaptureMode("connecting");
+	if (reconnecting) return;
+	reconnecting = true;
+	let attempt = 0;
+	const retry = async () => {
+		if (!ci || intentionalStop) { reconnecting = false; return; } // disabled while waiting
+		attempt++;
+		try {
+			await ci.start();
+			reconnecting = false;
+			setCaptureMode("live");
+			console.log(`[pcap] connected (attempt ${attempt}).`);
+		} catch (err) {
+			const delay = Math.min(2000 * attempt, 10000);
+			if (attempt === 1 || attempt % 10 === 0)
+				console.error(`[pcap] connect attempt ${attempt} failed (${err.message ?? err}) — retrying every ${delay / 1000}s`);
+			setTimeout(retry, delay);
+		}
+	};
+	setTimeout(retry, 2000);
+}
+
+function wire() {
 	ci.on("message", (m) => {
 		const d = m.parsedIpcData;
 		if (!d) return;
@@ -65,9 +115,10 @@ export function startCapture() {
 	});
 
 	ci.on("ready", async () => {
+		if (!ci) return; // disabled between construction and ready
 		console.log("[pcap] opcodes/constants loaded, connecting to bridge...");
 		setTimeout(() => {
-			if (!state.connected) {
+			if (state.capture !== "live" && !intentionalStop) {
 				console.warn(
 					`[pcap] Still not connected after 15s. Check that something is listening:\n` +
 					`         lsof -nP -iTCP:${BRIDGE_PORT}\n` +
@@ -78,46 +129,46 @@ export function startCapture() {
 		}, 15000);
 		try {
 			await ci.start();
-			state.connected = true;
-			broadcast({ type: "connected" });
+			setCaptureMode("live");
 			console.log("[pcap] capture started — move your character in game.");
 		} catch (err) {
-			console.error("[pcap] failed to start:", err);
-			console.error("Is Teamcraft running with Packet Capture enabled (bridge on port " + BRIDGE_PORT + ")?");
-			process.exit(1);
+			// Don't exit (old behavior) — capture is optional; keep retrying.
+			console.error(`[pcap] initial start failed (${err.message ?? err}) — retrying; the map works in browse mode meanwhile.`);
+			scheduleReconnect();
 		}
 	});
 
 	ci.on("error", (err) => console.error("[pcap] error:", err));
-
-	// Keep retrying until the bridge is back — a single attempt used to leave the
-	// daemon permanently deaf when the bridge was down for more than ~2s. Backs
-	// off 2s -> 10s.
-	let reconnecting = false;
 	ci.on("stopped", () => {
-		state.connected = false;
-		broadcast({ type: "disconnected" });
-		if (reconnecting) return;
-		reconnecting = true;
-		let attempt = 0;
-		const retry = async () => {
-			attempt++;
-			try {
-				await ci.start();
-				state.connected = true;
-				reconnecting = false;
-				broadcast({ type: "connected" });
-				console.log(`[pcap] reconnected (attempt ${attempt}).`);
-			} catch (err) {
-				const delay = Math.min(2000 * attempt, 10000);
-				if (attempt === 1 || attempt % 10 === 0)
-					console.error(`[pcap] reconnect attempt ${attempt} failed (${err.message ?? err}) — retrying every ${delay / 1000}s`);
-				setTimeout(retry, delay);
-			}
-		};
-		console.log("[pcap] capture stopped — reconnecting in 2s…");
-		setTimeout(retry, 2000);
+		console.log("[pcap] capture stopped.");
+		scheduleReconnect();
 	});
+}
 
+// Start capturing (idempotent). Builds the CaptureInterface; its 'ready' handler
+// performs the actual connect. No-op if already capturing.
+export function enableCapture() {
+	if (ci) return ci;
+	intentionalStop = false;
+	setCaptureMode("connecting");
+	ci = buildCi();
+	wire();
 	return ci;
 }
+
+// Stop capturing and return to browse mode (idempotent). Sets intentionalStop so
+// the resulting 'stopped' event (and any in-flight reconnect) goes quiet instead
+// of retrying, then detaches all listeners.
+export async function disableCapture() {
+	if (!ci) { setCaptureMode("browse"); return; }
+	const old = ci;
+	ci = null;
+	intentionalStop = true;
+	reconnecting = false;
+	try { await old.stop(); } catch (e) { console.warn("[pcap] stop failed:", e?.message ?? e); }
+	old.removeAllListeners();
+	setCaptureMode("browse");
+}
+
+// Back-compat alias for the default boot path (daemon with no run-mode flags).
+export const startCapture = enableCapture;

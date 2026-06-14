@@ -6,6 +6,7 @@ import { state } from "./state.mjs";
 import { customMarkers, saveMarkers } from "./markers-store.mjs";
 import { readBody, MIME, mapParam, getParam, sendJson } from "./http-util.mjs";
 import { mapById } from "./coords.mjs";
+import { enableCapture, disableCapture } from "./capture.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "../public");
@@ -203,6 +204,20 @@ const routes = [
 	(req, res) => {
 		if (req.url !== "/state") return false;
 		sendJson(res, state); return true;
+	},
+	async (req, res) => {
+		if (!req.url.startsWith("/capture")) return false;
+		// Runtime capture control for the UI's browse/capture toggle. GET reports the
+		// current mode; POST {on:true|false} attaches/detaches the packet-capture
+		// stack. The mode transition itself is broadcast over WebSocket (via
+		// setCaptureMode), so this just echoes the immediate state back to the caller.
+		if (req.method === "GET") { sendJson(res, { mode: state.capture }); return true; }
+		if (req.method === "POST") {
+			const { on } = await readBody(req);
+			if (on) enableCapture(); else await disableCapture();
+			sendJson(res, { mode: state.capture }); return true;
+		}
+		return false;
 	},
 ];
 

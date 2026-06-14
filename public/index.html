@@ -16,6 +16,10 @@
 	<label><input type="checkbox" id="followToggle" checked> Follow player</label>
 	<label><input type="checkbox" id="keepZoom" checked> Keep zoom on map switch</label>
 	<div id="coords"><span id="coordsText">X: –  Y: –</span>  <button id="findMe" title="Center the map on your character">📍 Find me</button></div>
+	<div id="modeRow">
+		<button id="captureToggle" title="Attach/detach live packet capture (off = browse mode)">▶ Enable capture</button>
+		<label title="Click the map to drop a static player dot (handy in browse mode)"><input type="checkbox" id="manualPos"> Set position on click</label>
+	</div>
 	<div id="nodeCount" class="muted"></div>
 	<div id="etClock" class="muted">ET --:--</div>
 	<details open><summary>Timed nodes (this map)</summary><div id="timedPanel"></div></details>
