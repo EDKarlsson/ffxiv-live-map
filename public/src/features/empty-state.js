@@ -19,10 +19,17 @@ export function emptyStateVisible(playerMap, isDismissed) {
 	return playerMap == null && !isDismissed;
 }
 
+let lastHidden = null; // skip redundant DOM writes: renderEmptyState() runs on every
+                       // WS message, including high-frequency `pos` updates as the
+                       // player moves (same guard as hud-toggle.js's lastCollapsed).
+
 export function renderEmptyState() {
 	const el = document.getElementById("emptyState");
 	if (!el) return;
-	el.hidden = !emptyStateVisible(state.playerMap, dismissed);
+	const hide = !emptyStateVisible(state.playerMap, dismissed);
+	if (hide === lastHidden) return;
+	lastHidden = hide;
+	el.hidden = hide;
 }
 
 export function initEmptyState() {

@@ -22,32 +22,30 @@ describe("emptyStateVisible", () => {
 
 // DOM wiring: the module reflects the rule onto #emptyState's `hidden` attribute.
 // empty-state.js depends only on the leaf state.js (no Leaflet), so it renders in
-// happy-dom without booting the map. The dismiss case runs last because the
-// module's session-only `dismissed` flag is a singleton that latches true.
-describe("renderEmptyState / initEmptyState (DOM)", () => {
-	const mount = () => {
+// happy-dom without booting the map. The whole lifecycle lives in one `it` on
+// purpose: the module's session-only `dismissed` flag is a singleton that latches
+// true, so splitting these into separate tests would make them order-dependent.
+describe("renderEmptyState / initEmptyState (DOM lifecycle)", () => {
+	it("shows on boot, auto-hides on first position, and is manually dismissible", () => {
 		document.body.innerHTML = `<div id="emptyState" hidden><button id="emptyStateDismiss"></button></div>`;
-		return document.getElementById("emptyState");
-	};
+		const el = document.getElementById("emptyState");
 
-	it("shows on boot with no position, hides on the first zone", () => {
-		const el = mount();
 		state.playerMap = null;
 		initEmptyState();
-		expect(el.hidden).toBe(false);
+		expect(el.hidden).toBe(false);              // boot, no position -> shown
 
 		state.playerMap = { id: 134 };
 		renderEmptyState();
-		expect(el.hidden).toBe(true);
-	});
+		expect(el.hidden).toBe(true);               // first position -> auto-hidden
 
-	it("hides on manual dismiss even while no position is known", () => {
-		const el = mount();
+		// Drive the render rule back to "no position" to re-show it, then prove the
+		// manual dismiss (the browsing / PS5 escape hatch) hides it on its own. (The
+		// live app never resets playerMap to null; this just exercises the rule.)
 		state.playerMap = null;
-		initEmptyState();
+		renderEmptyState();
 		expect(el.hidden).toBe(false);
 
 		document.getElementById("emptyStateDismiss").click();
-		expect(el.hidden).toBe(true);
+		expect(el.hidden).toBe(true);               // dismissed -> hidden, no position needed
 	});
 });
