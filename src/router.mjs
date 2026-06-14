@@ -211,6 +211,17 @@ export function createRequestHandler() {
 			// Static fallback: serve files from public/. Resolve + boundary-check so a
 			// `/../…` URL can't escape the public dir (the daemon binds all interfaces).
 			const file = req.url === "/" ? "index.html" : req.url.slice(1);
+			// In production serve the minified bundle: rewrite index.html's dev asset
+			// tags (/styles.css, /src/app.js) to the built /dist/ versions. Dev mode
+			// keeps loading the unbundled source modules (no build step needed).
+			if (file === "index.html" && process.env.NODE_ENV === "production") {
+				const html = (await readFile(join(PUBLIC_DIR, "index.html"), "utf-8"))
+					.replace("/styles.css", "/dist/styles.css")
+					.replace("/src/app.js", "/dist/app.js");
+				res.writeHead(200, { "Content-Type": "text/html" });
+				res.end(html);
+				return;
+			}
 			const full = resolve(PUBLIC_DIR, file);
 			if (full !== PUBLIC_DIR && !full.startsWith(PUBLIC_DIR + sep)) {
 				res.writeHead(403); res.end("forbidden"); return;
