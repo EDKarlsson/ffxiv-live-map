@@ -10,6 +10,10 @@ import { mapById } from "./coords.mjs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "../public");
 
+// Production index.html (dev asset tags rewritten to /dist/) is built once and
+// cached — the root path is hit on every page load.
+let prodHtmlCache = null;
+
 // Ordered route table. Each route returns true once it has handled the request
 // (mirrors the original `if (url.startsWith(...)) { …; return }` chain); requests
 // matching nothing fall through to the static-file fallback below.
@@ -215,11 +219,11 @@ export function createRequestHandler() {
 			// tags (/styles.css, /src/app.js) to the built /dist/ versions. Dev mode
 			// keeps loading the unbundled source modules (no build step needed).
 			if (file === "index.html" && process.env.NODE_ENV === "production") {
-				const html = (await readFile(join(PUBLIC_DIR, "index.html"), "utf-8"))
-					.replace("/styles.css", "/dist/styles.css")
-					.replace("/src/app.js", "/dist/app.js");
+				prodHtmlCache ??= (await readFile(join(PUBLIC_DIR, "index.html"), "utf-8"))
+					.replaceAll("/styles.css", "/dist/styles.css")
+					.replaceAll("/src/app.js", "/dist/app.js");
 				res.writeHead(200, { "Content-Type": "text/html" });
-				res.end(html);
+				res.end(prodHtmlCache);
 				return;
 			}
 			const full = resolve(PUBLIC_DIR, file);

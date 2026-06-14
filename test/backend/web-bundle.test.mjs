@@ -21,7 +21,7 @@ describe("web bundle (esbuild)", () => {
 		const js = readFileSync(join(dist, "app.js"), "utf-8");
 		expect(js.length).toBeGreaterThan(1000);
 		expect(js.split("\n").length).toBeLessThan(10); // minified
-		expect(js).toContain('L.map("map"'); // core/map.js made it into the bundle
+		expect(js).toMatch(/L\.map\(/); // core/map.js made it into the bundle (quote-agnostic)
 	});
 
 	it("produces a styles.css bundle + sourcemaps", () => {

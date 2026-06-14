@@ -10,10 +10,16 @@
  * Leaflet stays a CDN global (`L`), so it isn't bundled.
  */
 import * as esbuild from "esbuild";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 
 const watch = process.argv.includes("--watch");
+// Resolve paths from the script location, not the cwd, so it works when invoked
+// from anywhere (editors, CI runners).
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 const options = {
+	absWorkingDir: root,
 	entryPoints: ["public/src/app.js", "public/styles.css"],
 	outdir: "public/dist",
 	entryNames: "[name]", // flat output: dist/app.js + dist/styles.css (not dist/src/app.js)
