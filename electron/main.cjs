@@ -20,6 +20,13 @@ const http = require("node:http");
 const path = require("node:path");
 
 const ROOT = path.join(__dirname, "..");
+// Packaged (asar:false): app files live in Resources/app/, so ROOT/scripts and
+// the ESM daemon load as plain files. Derived data ships read-only in
+// Resources/data; writable runtime state (.state.json, custom-markers.json) goes
+// to userData since the app bundle is read-only.
+const PACKAGED = app.isPackaged;
+const DATA_DIR = PACKAGED ? path.join(process.resourcesPath, "data") : path.join(ROOT, "data");
+const STATE_DIR = PACKAGED ? app.getPath("userData") : ROOT;
 const BRIDGE_PORT = Number(process.env.BRIDGE_PORT || 31595);
 const HTTP_PORT = Number(process.env.HTTP_PORT || 8787);
 const URL = `http://localhost:${HTTP_PORT}`;
@@ -62,20 +69,28 @@ async function startStack() {
 	// each spawn launches another Electron app instead.) The flag propagates to
 	// grandchildren via the inherited env, so ensure-data's build scripts run as
 	// node too.
-	const nodeEnv = { ...process.env, ELECTRON_RUN_AS_NODE: "1" };
+	const nodeEnv = {
+		...process.env,
+		ELECTRON_RUN_AS_NODE: "1",
+		FFXIV_DATA_DIR: DATA_DIR,   // daemon + coords read derived data here
+		FFXIV_STATE_DIR: STATE_DIR, // daemon writes .state.json / custom-markers.json here
+	};
+	if (PACKAGED) nodeEnv.NODE_ENV = "production"; // serve the minified /dist bundle
 
-	// 1. Build bundled data on first run (no-op once cached). Spawn async, not
-	// spawnSync: the first build can take ~20s and a synchronous call would block
-	// Electron's main-process event loop the whole time (risking an OS "not
-	// responding" prompt). startStack is already async, so we just await it.
-	await new Promise((resolve, reject) => {
-		const ed = spawn(process.execPath, ["scripts/ensure-data.mjs"], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
-		ed.on("error", reject); // spawn itself failed (binary missing, EACCES, …)
-		ed.on("exit", (code) => {
-			if (code === 0) resolve();
-			else reject(new Error("data build failed (scripts/ensure-data.mjs)."));
+	// 1. Build bundled data on first run (dev only — the packaged app ships a
+	// prebuilt, read-only data/ in Resources). Spawn async, not spawnSync: the
+	// first build can take ~20s and a synchronous call would block Electron's
+	// main-process event loop the whole time (risking an OS "not responding").
+	if (!PACKAGED) {
+		await new Promise((resolve, reject) => {
+			const ed = spawn(process.execPath, ["scripts/ensure-data.mjs"], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
+			ed.on("error", reject); // spawn itself failed (binary missing, EACCES, …)
+			ed.on("exit", (code) => {
+				if (code === 0) resolve();
+				else reject(new Error("data build failed (scripts/ensure-data.mjs)."));
+			});
 		});
-	});
+	}
 
 	// 2. Deucalion bridge — start ours unless one is already listening. The
 	// script bails if FFXIV/Teamcraft aren't up, so the wait below will time out
@@ -91,7 +106,9 @@ async function startStack() {
 			// tree (bash + wine) down later via a negative-PID signal, instead of
 			// orphaning the wine child still holding the TCP port. (Not unref'd: we
 			// keep tracking it so we can kill it on quit.)
-			bridge = spawn("bash", ["scripts/start-bridge.sh", String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
+			// Absolute /bin/bash + absolute script path: a Finder-launched .app has a
+			// minimal PATH, so don't rely on `bash` being resolvable.
+			bridge = spawn("/bin/bash", [path.join(ROOT, "scripts/start-bridge.sh"), String(BRIDGE_PORT)], { cwd: ROOT, stdio: "inherit", detached: true });
 			bridge.on("error", (err) => { console.error(`[app] bridge spawn failed: ${err.message}`); });
 			bridge.on("exit", (code) => { console.log(`[app] bridge exited (${code})`); });
 		} else {
@@ -111,7 +128,7 @@ async function startStack() {
 	if (await httpOk(`${URL}/maps`)) {
 		console.log(`[app] reusing daemon already serving on ${URL}`);
 	} else {
-		daemon = spawn(process.execPath, ["src/daemon.mjs", "--bridge-port", String(BRIDGE_PORT), "--http-port", String(HTTP_PORT)], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
+		daemon = spawn(process.execPath, [path.join(ROOT, "src/daemon.mjs"), "--bridge-port", String(BRIDGE_PORT), "--http-port", String(HTTP_PORT)], { cwd: ROOT, stdio: "inherit", env: nodeEnv });
 		daemon.on("exit", (code) => {
 			console.log(`[app] daemon exited (${code})`);
 			// A crash after startup (port conflict, runtime error) would otherwise

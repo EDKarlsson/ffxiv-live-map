@@ -1,12 +1,9 @@
 import { readFileSync, watch } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { join } from "path";
+import { DATA_DIR } from "./paths.mjs";
 
 // Derived data (built by scripts/build-*.mjs). Loaded into a mutable `db` object
 // and watched, so rebuilding data hot-reloads the daemon — no restart needed.
-const DATA_DIR = join(__dirname, "../data");
 const readData = (f) => JSON.parse(readFileSync(join(DATA_DIR, f), "utf-8"));
 
 // Newer layer files may not exist on a data/ built by an older checkout — serve

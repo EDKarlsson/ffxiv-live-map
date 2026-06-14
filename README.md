@@ -112,6 +112,31 @@ entirely (and its engine warnings) with `npm install --omit=dev`.
 A frameless, always-on-top, click-through overlay over the game is the next
 step; for now it's a normal resizable window.
 
+### Building a `.dmg`
+
+```sh
+npm run dist:mac
+```
+
+Builds the frontend bundle (esbuild), then packages a macOS `.dmg` into
+`release/` with [electron-builder] (arm64 + x64). The app ships the minified web
+bundle, runs the daemon in production mode, and bundles the derived `data/`
+read-only in its Resources (writing `.state.json` / custom markers to
+`~/Library/Application Support/FFXIV Live Map/`). `npm run make-icon` regenerates
+the app icon.
+
+The build is **unsigned** (no Apple Developer ID), so on first launch macOS will
+say it "is damaged" or "cannot be opened." Clear the quarantine once:
+
+```sh
+xattr -cr "/Applications/FFXIV Live Map.app"
+```
+
+(or right-click the app → **Open** → **Open**). This is the price of an unsigned
+hobby build — the same as running any unsigned `.app`.
+
+[electron-builder]: https://www.electron.build/
+
 ### Why a second bridge?
 
 Teamcraft's own bridge (TCP **31594**) accepts exactly one client — once

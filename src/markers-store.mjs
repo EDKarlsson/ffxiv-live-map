@@ -1,12 +1,10 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { join } from "path";
+import { STATE_DIR } from "./paths.mjs";
 
 // User-placed custom markers, persisted to disk: { mapId: [ {id,x,y,label,icon} ] }.
 // Env override (FFXIV_MARKERS_FILE) keeps tests/CI off the user's real file.
-const MARKERS_FILE = process.env.FFXIV_MARKERS_FILE || join(__dirname, "../custom-markers.json");
+const MARKERS_FILE = process.env.FFXIV_MARKERS_FILE || join(STATE_DIR, "custom-markers.json");
 
 export const customMarkers = {};
 try {
