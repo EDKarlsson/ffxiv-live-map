@@ -23,7 +23,7 @@ function freePort() {
 	});
 }
 
-let proc, base, markersFile;
+let proc, base, markersFile, settingsFile;
 
 beforeAll(async () => {
 	const port = await freePort();
@@ -31,10 +31,13 @@ beforeAll(async () => {
 	// Point the daemon's custom-markers store at a throwaway temp file so the
 	// /custom round-trip never touches the developer's real custom-markers.json.
 	markersFile = join(tmpdir(), `ffxiv-test-markers-${port}.json`);
+	// Likewise redirect the persisted settings file (POST /capture writes it) so the
+	// test can't drop a .settings.json into the repo root.
+	settingsFile = join(tmpdir(), `ffxiv-test-settings-${port}.json`);
 	let stderr = "";
 	proc = spawn(process.execPath, [join(root, "src/daemon.mjs"), "--no-capture", "--http-port", String(port)], {
 		cwd: root,
-		env: { ...process.env, FFXIV_MARKERS_FILE: markersFile },
+		env: { ...process.env, FFXIV_MARKERS_FILE: markersFile, FFXIV_SETTINGS_FILE: settingsFile },
 		stdio: ["ignore", "ignore", "pipe"], // capture stderr so a boot failure is diagnosable
 	});
 	proc.stderr.on("data", (d) => { stderr += d; });
@@ -50,6 +53,7 @@ beforeAll(async () => {
 afterAll(() => {
 	proc?.kill();
 	try { if (markersFile) unlinkSync(markersFile); } catch { /* never created — fine */ }
+	try { if (settingsFile) unlinkSync(settingsFile); } catch { /* never created — fine */ }
 });
 
 const json = (path) => fetch(`${base}${path}`).then((r) => r.json());
@@ -154,6 +158,8 @@ describe("daemon HTTP endpoints (characterization)", () => {
 		}).then((r) => r.json());
 		expect(res.mode).toBe("browse");
 		expect((await fetch(`${base}/maps`)).ok).toBe(true);
+		// …and the choice is persisted (#12) so it can be restored next launch.
+		expect(JSON.parse(readFileSync(settingsFile, "utf-8")).captureEnabled).toBe(false);
 	});
 
 	it("unknown path -> 404", async () => {

@@ -21,6 +21,7 @@ import { attachWebSocket } from "./ws.mjs";
 import { enableCapture, setCaptureMode } from "./capture.mjs";
 import { startGameMonitor } from "./game-monitor.mjs";
 import { startMock } from "./mock.mjs";
+import { getDaemonSetting } from "./settings-store.mjs";
 
 const server = createServer(createRequestHandler());
 attachWebSocket(server);
@@ -28,13 +29,16 @@ server.listen(HTTP_PORT, () => {
 	console.log(`[map] UI on http://localhost:${HTTP_PORT} (bridge port ${BRIDGE_PORT})`);
 });
 
-// Run mode:
+// Run mode — precedence is CLI flag > persisted config (#12) > built-in default:
 //   --mock        synthetic moving character (no real capture)
 //   --no-capture  inert browse: serve the map, never capture (tests/CI)
 //   --browse      browse by default, but watch for the game and auto-attach
 //                 capture when FFXIV launches (capture also toggleable via the UI)
-//   (default)     attach the real packet-capture stack immediately
+//   (default)     honor the persisted capture preference: if the user last
+//                 stopped capture, start in browse (+ game monitor so it can
+//                 re-attach); otherwise attach the real capture stack immediately.
 if (MOCK) startMock();
 else if (NO_CAPTURE) setCaptureMode("browse");
 else if (BROWSE) { setCaptureMode("browse"); startGameMonitor(); }
-else enableCapture();
+else if (getDaemonSetting("captureEnabled", true)) enableCapture();
+else { setCaptureMode("browse"); startGameMonitor(); }
