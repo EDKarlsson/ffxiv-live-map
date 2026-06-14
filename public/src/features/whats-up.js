@@ -36,7 +36,7 @@ export function renderUp() {
 			const mapId = Number(row.dataset.map);
 			if (state.viewedMap?.id !== mapId) {
 				setFollow(false);
-				await new Promise((res) => { fetch(`/map?id=${mapId}`).then((r) => r.json()).then((m) => { viewMap(m); setTimeout(res, 400); }); });
+				await viewMap(await fetch(`/map?id=${mapId}`).then((r) => r.json()));
 			}
 			map.flyTo(coordLL(Number(row.dataset.x), Number(row.dataset.y)), 2);
 		};

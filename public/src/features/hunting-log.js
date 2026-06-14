@@ -38,7 +38,7 @@ async function gotoMob(mobId) {
 		if (!maps.length) return;
 		m = await fetch(`/map?id=${maps[0]}`).then((r) => r.json());
 		setFollow(false);
-		await new Promise((res) => { viewMap(m); setTimeout(res, 400); });
+		await viewMap(m);
 	}
 	const mob = mobData.find((x) => x.id === mobId);
 	if (mob) {

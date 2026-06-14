@@ -40,8 +40,7 @@ export function setPos(p, rot) {
 export async function findMe() {
 	if (!state.playerMap || !state.lastPos) return;
 	if (state.viewedMap?.id !== state.playerMap.id) {
-		viewMap(state.playerMap);
-		await new Promise((r) => setTimeout(r, 300));
+		await viewMap(state.playerMap);
 	}
 	map.flyTo(px2ll(state.lastPos.pixelX, state.lastPos.pixelY), Math.max(map.getZoom(), 2));
 }

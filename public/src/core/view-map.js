@@ -25,7 +25,10 @@ export function setFollow(v) {
 }
 
 // The orchestrator: switch the displayed map and reload every layer for it.
-export function viewMap(m) {
+// Returns a promise that resolves once all layer loads have settled, so callers
+// (find-material, list-import, whats-up, hunting-log, "find me") can `await
+// viewMap(m)` before flying to a coordinate instead of guessing with setTimeout.
+export async function viewMap(m) {
 	if (!m || state.viewedMap?.id === m.id) { refreshMarker(); return; }
 	const hadMap = state.viewedMap !== null;
 	state.viewedMap = m;
@@ -34,20 +37,25 @@ export function viewMap(m) {
 	// re-fit: center and zoom carry over.
 	if (!hadMap || !document.getElementById("keepZoom").checked) map.fitBounds(bounds);
 	applyPickerSelection(m);
-	loadNodes(m).catch((e) => console.error("loadNodes failed:", e));
-	loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e));
-	loadFates(m).catch((e) => console.error("loadFates failed:", e));
-	loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e));
-	loadFishing(m).catch((e) => console.error("loadFishing failed:", e));
-	loadMapMarkers(m).catch((e) => console.error("loadMapMarkers failed:", e));
-	loadTreasures(m).catch((e) => console.error("loadTreasures failed:", e));
-	loadVistas(m).catch((e) => console.error("loadVistas failed:", e));
-	loadCurrents(m).catch((e) => console.error("loadCurrents failed:", e));
+	// Kick every layer load off concurrently; each catches its own error so one
+	// failure can't reject the rest. We await them all at the end.
+	const loads = [
+		loadNodes(m).catch((e) => console.error("loadNodes failed:", e)),
+		loadMonsters(m).catch((e) => console.error("loadMonsters failed:", e)),
+		loadFates(m).catch((e) => console.error("loadFates failed:", e)),
+		loadNpcs(m).catch((e) => console.error("loadNpcs failed:", e)),
+		loadFishing(m).catch((e) => console.error("loadFishing failed:", e)),
+		loadMapMarkers(m).catch((e) => console.error("loadMapMarkers failed:", e)),
+		loadTreasures(m).catch((e) => console.error("loadTreasures failed:", e)),
+		loadVistas(m).catch((e) => console.error("loadVistas failed:", e)),
+		loadCurrents(m).catch((e) => console.error("loadCurrents failed:", e)),
+		loadCustom(m).catch((e) => console.error("loadCustom failed:", e)),
+	];
 	if (huntData) renderHunt(); // refresh 📍 here-markers for the new map
 	if (listData) { renderList(); highlightListNodes(); }
 	routeLayer.clearLayers();
 	matLayer.clearLayers(); // material-search rings are per-map highlights
 	document.getElementById("routeInfo").textContent = "";
-	loadCustom(m).catch((e) => console.error("loadCustom failed:", e));
 	refreshMarker();
+	await Promise.all(loads);
 }

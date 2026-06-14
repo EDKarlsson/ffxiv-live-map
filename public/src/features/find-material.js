@@ -13,7 +13,7 @@ async function matJump(hit) {
 	if (!n) return;
 	if (n.map !== state.viewedMap?.id) {
 		setFollow(false);
-		await new Promise((r) => { fetch(`/map?id=${n.map}`).then((x) => x.json()).then((m) => { viewMap(m); setTimeout(r, 400); }); });
+		await viewMap(await fetch(`/map?id=${n.map}`).then((x) => x.json()));
 	}
 	// Ring every node of this item on the (now) viewed map.
 	matLayer.clearLayers();
