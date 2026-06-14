@@ -1,5 +1,6 @@
 import { handleZone, setPos } from "./player.js";
 import { renderCaptureMode } from "../features/capture-toggle.js";
+import { renderEmptyState } from "../features/empty-state.js";
 import { statusFor } from "./status.js";
 
 // Status reflects two things: the browser->daemon WebSocket link, and the
@@ -39,5 +40,8 @@ export function connect() {
 			mode = msg.mode;
 			render();
 		}
+		// Any message may be the first to populate state.playerMap (via handleZone);
+		// re-evaluate the first-run prompt here so it hides on the first real zone.
+		renderEmptyState();
 	};
 }

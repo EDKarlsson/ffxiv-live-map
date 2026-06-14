@@ -26,6 +26,28 @@ body.hud-collapsed #hudToggle { right: 14px; }
    doesn't cover the game; the normal window keeps them (set by overlay-settings.js). */
 body.is-overlay .leaflet-control-layers,
 body.is-overlay .leaflet-control-attribution { display: none; }
+/* First-run empty-state prompt. :not([hidden]) (not a plain #emptyState rule) so
+   the `hidden` attribute still wins — an ID selector would otherwise beat the UA
+   `[hidden]{display:none}`. pointer-events:none lets map pans pass through to a
+   manually-picked map; the card itself re-enables events for its dismiss button. */
+#emptyState:not([hidden]) {
+	position: absolute; inset: 0; z-index: 800;
+	display: flex; align-items: center; justify-content: center;
+	pointer-events: none;
+}
+.empty-card {
+	pointer-events: auto; max-width: 360px; margin: 0 16px; text-align: center;
+	background: rgba(20, 22, 28, 0.92); border: 1px solid #333; border-radius: 10px;
+	padding: 18px 22px; box-shadow: 0 6px 24px rgba(0, 0, 0, .5);
+}
+.empty-card h2 { margin: 0 0 8px; font-size: 16px; }
+.empty-card p { margin: 6px 0; font-size: 13px; line-height: 1.5; }
+.empty-card .muted { color: #9aa0aa; font-size: 12px; }
+.empty-card button {
+	background: #2e4a6e; color: #fff; border: 1px solid #4a6a92; border-radius: 4px;
+	padding: 2px 8px; cursor: pointer; font-size: 12px;
+}
+.empty-card button:hover { background: #3a5d88; }
 #hud select { width: 100%; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px; margin: 4px 0; }
 #hud input[type="text"] { width: 100%; box-sizing: border-box; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px 6px; margin: 4px 0; }
 #hud label { cursor: pointer; }

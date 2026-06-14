@@ -9,6 +9,16 @@
 </head>
 <body>
 <div id="map"></div>
+<!-- First-run prompt: shown over the map while no player position is known yet
+     (empty-state.js). pointer-events:none on the backdrop lets the user still pan
+     a manually-picked map; the card re-enables events so its dismiss button works. -->
+<div id="emptyState" hidden role="status">
+	<div class="empty-card">
+		<h2>Waiting for your character…</h2>
+		<p>Change zones in-game — zone in, teleport, or step through an exit — to initialize the map and drop your player marker.</p>
+		<p class="muted">Just browsing maps, or playing on PS5? Pick any map from the panel — <button type="button" id="emptyStateDismiss">dismiss this</button>.</p>
+	</div>
+</div>
 <button id="hudToggle" type="button" title="Hide panel" aria-label="Hide panel" aria-controls="hud" aria-expanded="true">✕</button>
 <div id="overlayDrag" hidden aria-hidden="true" title="Drag to move the overlay">⠿</div>
 <div id="hud">
