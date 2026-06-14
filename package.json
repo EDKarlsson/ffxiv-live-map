@@ -4,7 +4,7 @@
 	"description": "Standalone live map for FFXIV — player position via Teamcraft's pcap-ffxiv (Deucalion TCP bridge), rendered in a browser.",
 	"author": "EDKarlsson",
 	"type": "module",
-	"main": "src/daemon.mjs",
+	"main": "electron/main.cjs",
 	"scripts": {
 		"build-data": "node scripts/build-node-data.mjs && node scripts/build-hunting-log.mjs && node scripts/build-extra-layers.mjs && node scripts/build-map-markers.mjs",
 		"rebuild-data": "node scripts/ensure-data.mjs --force",
