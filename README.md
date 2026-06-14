@@ -98,6 +98,20 @@ Deucalion bridge, launches the daemon, and opens the map in your browser at
 <http://localhost:8787>. Leave it running and move around in game to see your
 dot; press **Ctrl+C** to stop the daemon and the bridge together.
 
+### Browse mode (no capture)
+
+```sh
+npm run browse
+```
+
+`npm run browse` opens the same map at <http://localhost:8787> but with **no
+packet capture** — no Deucalion bridge and no running game required, so the
+**Prereqs** above don't apply: browse mode needs only Node and npm. It's handy
+as a reference while you play on PS5 (or any time FFXIV isn't running on this
+Mac): pick any map, plan routes, and look things up. You can still toggle capture
+on from the UI — that's when Teamcraft and a running game are needed — and the
+daemon auto-attaches if it detects the Mac game.
+
 ### Desktop app (experimental)
 
 `npm run app` runs the whole stack inside an Electron window instead of a
