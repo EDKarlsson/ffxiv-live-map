@@ -2,6 +2,7 @@ import { mapForTerritory, mapById, convertPosition } from "./coords.mjs";
 import { db } from "./data-store.mjs";
 import { state } from "./state.mjs";
 import { broadcast } from "./ws.mjs";
+import { setCaptureMode } from "./capture.mjs";
 import { MOCK_ZONE } from "./config.mjs";
 
 // Synthetic zone + moving character for headless/remote verification when the
@@ -17,10 +18,10 @@ export function startMock() {
 		return;
 	}
 	state.map = map;
-	state.connected = true;
+	// Mock simulates a connected game, so the UI status pill should read "live".
+	setCaptureMode("live");
 	console.log(`[mock] synthetic character in ${map.image} (zone ${MOCK_ZONE}) — pass --mock-zone <id> to change.`);
 	broadcast({ type: "zone", map });
-	broadcast({ type: "connected" });
 	let t = 0;
 	setInterval(() => {
 		t += 0.08;

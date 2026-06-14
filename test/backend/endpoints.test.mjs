@@ -134,6 +134,28 @@ describe("daemon HTTP endpoints (characterization)", () => {
 		expect(after.some((m) => m.id === created.id)).toBe(false);
 	});
 
+	it("GET /state reports a capture mode (browse under --no-capture)", async () => {
+		const s = await json("/state");
+		expect(s).toHaveProperty("capture");
+		expect(s.capture).toBe("browse");
+	});
+
+	it("GET /capture -> { mode }", async () => {
+		const c = await json("/capture");
+		expect(["browse", "connecting", "live"]).toContain(c.mode);
+	});
+
+	it("POST /capture {on:false} -> browse, daemon survives", async () => {
+		// Disable is the safe half to assert here: enabling would build a real
+		// CaptureInterface that fetches opcodes + dials the (absent) bridge. Disable
+		// is a no-op in --no-capture mode and must leave us in browse.
+		const res = await fetch(`${base}/capture`, {
+			method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on: false }),
+		}).then((r) => r.json());
+		expect(res.mode).toBe("browse");
+		expect((await fetch(`${base}/maps`)).ok).toBe(true);
+	});
+
 	it("unknown path -> 404", async () => {
 		expect((await fetch(`${base}/no-such-endpoint`)).status).toBe(404);
 	});
