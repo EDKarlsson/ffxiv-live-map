@@ -8,6 +8,9 @@ scripts/.tc-cache/
 # Test coverage reports
 coverage/
 
+# esbuild web bundle (built from public/src + styles.css)
+public/dist/
+
 # Local Claude agent config + memory (personal notes — never share)
 .claude/
 

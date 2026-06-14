@@ -7,6 +7,8 @@
 	"scripts": {
 		"build-data": "node scripts/build-node-data.mjs && node scripts/build-hunting-log.mjs && node scripts/build-extra-layers.mjs && node scripts/build-map-markers.mjs",
 		"rebuild-data": "node scripts/ensure-data.mjs --force",
+		"build:web": "node scripts/build-web.mjs",
+		"dev:web": "node scripts/build-web.mjs --watch",
 		"start": "scripts/start.sh",
 		"app": "electron electron/main.cjs",
 		"bridge": "scripts/start-bridge.sh",
@@ -28,6 +30,7 @@
 	"devDependencies": {
 		"@vitest/coverage-v8": "^4.1.8",
 		"electron": "^42.4.0",
+		"esbuild": "^0.28.1",
 		"happy-dom": "^20.10.3",
 		"vitest": "^4.1.8"
 	}
