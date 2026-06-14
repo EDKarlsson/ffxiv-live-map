@@ -1,8 +1,6 @@
 import { readFileSync, writeFileSync, existsSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { join } from "path";
+import { STATE_DIR } from "./paths.mjs";
 
 // Live player/zone state, broadcast to the UI over WebSocket.
 export const state = {
@@ -15,7 +13,7 @@ export const state = {
 // Persist last zone/position so a daemon restart doesn't need a zone change to
 // show the map again. Stale-zone caveat: if you switch zones while the daemon is
 // down, this restores the old zone until the next initZone.
-const STATE_FILE = join(__dirname, "../.state.json");
+const STATE_FILE = join(STATE_DIR, ".state.json");
 try {
 	if (existsSync(STATE_FILE)) {
 		const saved = JSON.parse(readFileSync(STATE_FILE, "utf-8"));

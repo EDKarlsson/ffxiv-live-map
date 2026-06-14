@@ -1,0 +1,40 @@
+appId: com.dank.ffxiv-live-map
+productName: FFXIV Live Map
+directories:
+  output: release
+  buildResources: build
+
+# asar OFF on purpose: the daemon is raw ESM (.mjs), and Electron's asar support
+# doesn't reliably cover the ESM loader — inside an asar the daemon would fail to
+# import its modules. Plain files in Resources/app/ load fine and let `bash` exec
+# the bridge script directly.
+asar: false
+
+files:
+  - src/**/*
+  - public/index.html
+  - public/dist/**/*   # the esbuild bundle (PR3) — NOT public/src or styles.css
+  - electron/**/*
+  - scripts/**/*
+  - package.json
+
+# Derived data is built before packaging and shipped read-only here; the app
+# points FFXIV_DATA_DIR at it and writes runtime state to userData.
+extraResources:
+  - from: data
+    to: data
+
+mac:
+  category: public.app-category.games
+  icon: build/icon.icns
+  identity: null         # unsigned personal build — no Apple Developer ID
+  hardenedRuntime: false # must be off when unsigned
+  gatekeeperAssess: false
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+
+dmg:
+  title: "${productName} ${version}"

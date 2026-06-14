@@ -11,6 +11,11 @@ coverage/
 # esbuild web bundle (built from public/src + styles.css)
 public/dist/
 
+# electron-builder artifacts (the .dmg + the unpacked .app)
+release/
+# transient icon scratch (icon.icns + icon-1024.png are committed)
+build/icon.iconset/
+
 # Local Claude agent config + memory (personal notes — never share)
 .claude/
 

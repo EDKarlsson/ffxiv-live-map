@@ -13,11 +13,10 @@
  */
 
 import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { join } from "path";
+import { DATA_DIR } from "./paths.mjs";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const maps = JSON.parse(readFileSync(join(__dirname, "../data/maps.json"), "utf-8"));
+const maps = JSON.parse(readFileSync(join(DATA_DIR, "maps.json"), "utf-8"));
 
 /** In-game map coordinate (the numbers you see on the in-game map, ~1..42). */
 export function toMapCoord(raw, offset, sizeFactor) {
