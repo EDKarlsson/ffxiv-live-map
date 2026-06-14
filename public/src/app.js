@@ -19,6 +19,7 @@ import { buildPicker } from "./features/map-picker.js";
 import { initCaptureToggle } from "./features/capture-toggle.js";
 import { initManualPosition } from "./features/manual-position.js";
 import { initHudToggle } from "./features/hud-toggle.js";
+import { initOverlaySettings } from "./features/overlay-settings.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -45,8 +46,9 @@ keepZoomBox.onchange = () => localStorage.setItem("keepZoom", keepZoomBox.checke
 // --- init panels + timers -----------------------------------------------------
 initHudToggle();   // collapsible HUD (manual toggle + responsive auto-collapse)
 initCustomMarkers();
-initCaptureToggle();   // wire the browse/capture toggle before connect() (first WS state msg renders it)
-initManualPosition();  // "set position on click" for browse mode
+initCaptureToggle();      // wire the browse/capture toggle before connect() (first WS state msg renders it)
+initManualPosition();     // "set position on click" for browse mode
+initOverlaySettings();    // overlay opacity controls (desktop app only; hidden in a browser)
 applySizes();
 buildSizePanel();
 setInterval(tick, 1000);       // ET clock + timed-node panel

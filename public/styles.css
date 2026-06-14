@@ -27,6 +27,9 @@ body.hud-collapsed #hudToggle { right: 14px; }
 #hud label { cursor: pointer; }
 #hud details { margin-top: 6px; border-top: 1px solid #333; padding-top: 6px; }
 #hud summary { cursor: pointer; font-weight: 600; }
+/* Overlay opacity sliders (desktop app only). */
+#overlaySection label { display: block; margin: 4px 0; }
+#overlaySection input[type="range"] { width: 110px; vertical-align: middle; }
 #status { position: absolute; bottom: 10px; left: 10px; z-index: 1000; font-size: 12px;
 	padding: 4px 10px; border-radius: 6px; background: rgba(20,22,28,.85); border: 1px solid #333; }
 #status.ok { color: #7fd17f; } #status.bad { color: #e07a7a; } #status.warn { color: #e8c36a; }

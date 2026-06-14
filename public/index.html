@@ -23,6 +23,12 @@
 	</div>
 	<div id="nodeCount" class="muted"></div>
 	<div id="etClock" class="muted">ET --:--</div>
+	<details id="overlaySection" hidden><summary>Overlay window</summary>
+		<div class="muted" style="margin:4px 0">Toggle the floating overlay from the View menu or <b>⌘⇧O</b>.</div>
+		<label>Focused <input type="range" id="ovFocused" min="20" max="100" value="100"> <span id="ovFocusedVal" class="muted">100%</span></label>
+		<label>Unfocused <input type="range" id="ovUnfocused" min="10" max="100" value="55"> <span id="ovUnfocusedVal" class="muted">55%</span></label>
+		<label><input type="checkbox" id="ovPassthrough"> Click-through when unfocused-overlaid</label>
+	</details>
 	<details open><summary>Timed nodes (this map)</summary><div id="timedPanel"></div></details>
 	<details><summary>What's up now (all maps)</summary>
 		<div>
