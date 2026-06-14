@@ -9,12 +9,17 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("overlay", {
-	// -> { focused, unfocused, passthrough } (focused/unfocused are fractions 0..1).
+	// True only in the overlay window itself (main passes --is-overlay) — lets the
+	// renderer show the free-float drag grip there but not in the normal window.
+	isOverlay: process.argv.includes("--is-overlay"),
+	// -> { focused, unfocused, passthrough, placement, bounds }.
 	getConfig: () => ipcRenderer.invoke("overlay:getConfig"),
 	// Persist + apply the two opacities (fractions 0..1).
 	setOpacities: (focused, unfocused) => ipcRenderer.send("overlay:setOpacities", { focused, unfocused }),
 	// Click-through: when on, mouse events fall through the overlay to the game behind it.
 	setPassthrough: (on) => ipcRenderer.send("overlay:setPassthrough", !!on),
+	// Snap the overlay to a corner / "center" (or "free"); recomputed from the display.
+	setPlacement: (key) => ipcRenderer.send("overlay:setPlacement", key),
 	// Show/hide the overlay window (same action as the View menu / global shortcut).
 	toggle: () => ipcRenderer.send("overlay:toggle"),
 });

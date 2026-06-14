@@ -19,7 +19,7 @@ describe("index.html HUD structure", () => {
 	const ids = [
 		"map", "hud", "hudToggle", "zoneName", "mapPicker", "contentOnly", "followToggle", "keepZoom",
 		"coordsText", "findMe", "captureToggle", "manualPos", "nodeCount", "etClock", "timedPanel",
-		"overlaySection", "ovFocused", "ovUnfocused", "ovPassthrough",
+		"overlaySection", "ovFocused", "ovUnfocused", "ovPassthrough", "ovPlacement", "overlayDrag",
 		"upJob", "upLevel", "upOnly", "upList",
 		"mobSearch", "mobList", "npcSearch", "npcQuest", "npcVendor", "npcInfo",
 		"matSearch", "matList", "treasureList", "aetherInfo",
