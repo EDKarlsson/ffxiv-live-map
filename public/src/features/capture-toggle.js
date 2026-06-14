@@ -32,21 +32,26 @@ export function initCaptureToggle() {
 	btn.onclick = async () => {
 		if (pending) return;
 		const turnOn = btn.dataset.on !== "1"; // off (or unknown) -> turn on
+		const prevText = btn.textContent;
 		pending = true;
 		btn.disabled = true;
 		btn.textContent = turnOn ? "Connecting…" : "Stopping…";
 		try {
-			await fetch("/capture", {
+			// fetch only rejects on network errors, so check res.ok too — a 4xx/5xx
+			// would otherwise leave the button stuck (no WS mode update would arrive).
+			const res = await fetch("/capture", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ on: turnOn }),
 			});
-			// Intentionally don't update the label here — the daemon's WebSocket
-			// broadcast drives renderCaptureMode() with the authoritative mode.
+			if (!res.ok) throw new Error(`/capture responded ${res.status}`);
+			// On success, don't set the label here — the daemon's WebSocket broadcast
+			// drives renderCaptureMode() with the authoritative mode.
 		} catch (e) {
 			console.error("capture toggle failed:", e);
 			pending = false;
 			btn.disabled = false;
+			btn.textContent = prevText;
 		}
 	};
 }

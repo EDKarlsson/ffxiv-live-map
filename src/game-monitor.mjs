@@ -14,22 +14,34 @@ let present = null; // last known game presence (null = unknown, before first po
 function gameRunning() {
 	return new Promise((resolve) => {
 		// execFile (no shell) avoids any interpretation of GAME_PROCESS. `pgrep -f`
-		// matches the full command line; exit 0 with output = running, anything
-		// else (no match, or pgrep absent) = not running.
-		execFile("pgrep", ["-f", GAME_PROCESS], (err, stdout) => resolve(!err && stdout.trim().length > 0));
+		// matches the full command line; exclude our own PID so an explicit
+		// --game-process that happens to match the daemon's argv can't self-detect.
+		execFile("pgrep", ["-f", GAME_PROCESS], (err, stdout) => {
+			if (err) { resolve(false); return; } // no match, or pgrep absent
+			const pids = stdout.trim().split(/\s+/).map(Number).filter((pid) => pid && pid !== process.pid);
+			resolve(pids.length > 0);
+		});
 	});
 }
 
+let polling = false; // gameRunning() is async; don't let interval ticks overlap
+
 async function poll() {
-	const now = await gameRunning();
-	if (now === present) return; // only act on transitions
-	present = now;
-	if (now) {
-		console.log(`[monitor] ${GAME_PROCESS} detected — attaching capture.`);
-		enableCapture();
-	} else {
-		console.log(`[monitor] ${GAME_PROCESS} not running — browse mode.`);
-		disableCapture();
+	if (polling) return;
+	polling = true;
+	try {
+		const now = await gameRunning();
+		if (now === present) return; // only act on transitions
+		present = now;
+		if (now) {
+			console.log(`[monitor] ${GAME_PROCESS} detected — attaching capture.`);
+			enableCapture();
+		} else {
+			console.log(`[monitor] ${GAME_PROCESS} not running — browse mode.`);
+			await disableCapture(); // await so a fast flap can't land out of order
+		}
+	} finally {
+		polling = false;
 	}
 }
 

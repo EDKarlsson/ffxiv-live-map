@@ -213,7 +213,10 @@ const routes = [
 		// setCaptureMode), so this just echoes the immediate state back to the caller.
 		if (req.method === "GET") { sendJson(res, { mode: state.capture }); return true; }
 		if (req.method === "POST") {
+			// readBody() resolves {} on empty/invalid JSON, so require an explicit
+			// boolean `on` — else a malformed body would silently disable capture.
 			const { on } = await readBody(req);
+			if (typeof on !== "boolean") { res.writeHead(400); res.end("expected { on: boolean }"); return true; }
 			if (on) enableCapture(); else await disableCapture();
 			sendJson(res, { mode: state.capture }); return true;
 		}

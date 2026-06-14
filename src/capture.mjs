@@ -37,8 +37,8 @@ function handlePosition(pos, rotation) {
 // the game monitor auto-attaches/detaches as FFXIV starts/stops — so the stack
 // is built and torn down here rather than once at boot.
 let ci = null;
-let intentionalStop = false; // set by disableCapture so 'stopped' skips reconnect
 let reconnecting = false;
+let reconnectTimer = null; // pending backoff timer, so enable/disable can cancel it
 
 function buildCi() {
 	return new CaptureInterface({
@@ -59,15 +59,16 @@ function buildCi() {
 // when the bridge was down for more than ~2s; an initial-connect failure used to
 // exit the process. Capture is optional now, so we keep retrying instead — the
 // map stays usable as a browse view meanwhile, and capture attaches when the
-// bridge appears. Aborts if capture was disabled (ci nulled / intentionalStop).
+// bridge appears. enable/disableCapture cancel the pending timer (reconnectTimer)
+// and detach listeners, so a manual stop quietly ends the loop without a flag.
 function scheduleReconnect() {
-	if (intentionalStop) { intentionalStop = false; setCaptureMode("browse"); return; }
 	setCaptureMode("connecting");
 	if (reconnecting) return;
 	reconnecting = true;
 	let attempt = 0;
 	const retry = async () => {
-		if (!ci || intentionalStop) { reconnecting = false; return; } // disabled while waiting
+		reconnectTimer = null;
+		if (!ci) { reconnecting = false; return; } // disabled while waiting
 		attempt++;
 		try {
 			await ci.start();
@@ -78,10 +79,10 @@ function scheduleReconnect() {
 			const delay = Math.min(2000 * attempt, 10000);
 			if (attempt === 1 || attempt % 10 === 0)
 				console.error(`[pcap] connect attempt ${attempt} failed (${err.message ?? err}) — retrying every ${delay / 1000}s`);
-			setTimeout(retry, delay);
+			reconnectTimer = setTimeout(retry, delay);
 		}
 	};
-	setTimeout(retry, 2000);
+	reconnectTimer = setTimeout(retry, 2000);
 }
 
 function wire() {
@@ -116,9 +117,10 @@ function wire() {
 
 	ci.on("ready", async () => {
 		if (!ci) return; // disabled between construction and ready
+		const instance = ci; // so a later disable/re-enable suppresses this warn
 		console.log("[pcap] opcodes/constants loaded, connecting to bridge...");
 		setTimeout(() => {
-			if (state.capture !== "live" && !intentionalStop) {
+			if (ci === instance && state.capture !== "live") {
 				console.warn(
 					`[pcap] Still not connected after 15s. Check that something is listening:\n` +
 					`         lsof -nP -iTCP:${BRIDGE_PORT}\n` +
@@ -146,28 +148,30 @@ function wire() {
 }
 
 // Start capturing (idempotent). Builds the CaptureInterface; its 'ready' handler
-// performs the actual connect. No-op if already capturing.
+// performs the actual connect. Cancels any pending reconnect first. No-op if
+// already capturing.
 export function enableCapture() {
+	if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 	if (ci) return ci;
-	intentionalStop = false;
 	setCaptureMode("connecting");
 	ci = buildCi();
 	wire();
 	return ci;
 }
 
-// Stop capturing and return to browse mode (idempotent). Sets intentionalStop so
-// the resulting 'stopped' event (and any in-flight reconnect) goes quiet instead
-// of retrying, then detaches all listeners.
+// Stop capturing and return to browse mode (idempotent). Cancels any pending
+// reconnect, then detaches listeners *before* stopping — so the resulting
+// 'stopped' event can't re-trigger a reconnect — and marks browse up front, so a
+// concurrent re-enable isn't clobbered by a late write after the await resolves.
 export async function disableCapture() {
+	if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 	if (!ci) { setCaptureMode("browse"); return; }
 	const old = ci;
 	ci = null;
-	intentionalStop = true;
 	reconnecting = false;
-	try { await old.stop(); } catch (e) { console.warn("[pcap] stop failed:", e?.message ?? e); }
 	old.removeAllListeners();
 	setCaptureMode("browse");
+	try { await old.stop(); } catch (e) { console.warn("[pcap] stop failed:", e?.message ?? e); }
 }
 
 // Back-compat alias for the default boot path (daemon with no run-mode flags).

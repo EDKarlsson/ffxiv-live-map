@@ -104,23 +104,36 @@ function startBridge() {
 function stopBridge() {
 	if (!bridge) return;
 	try {
-		if (process.platform === "darwin") process.kill(-bridge.pid, "SIGTERM"); // whole group (bash + wine)
-		else bridge.kill();
+		// A bridge that failed to spawn (or already exited) can have an undefined
+		// pid; process.kill(-NaN) throws and would crash the main process.
+		if (process.platform === "darwin" && typeof bridge.pid === "number") {
+			process.kill(-bridge.pid, "SIGTERM"); // whole group (bash + wine)
+		} else {
+			bridge.kill();
+		}
 	} catch { /* already gone */ }
 	bridge = null;
 }
 
 // Keep the bridge in sync with the game: start it when FFXIV is up (so the
 // daemon's game monitor can attach capture), stop ours when the game exits. We
-// never touch a bridge we didn't spawn (e.g. one from start-bridge.sh).
+// never touch a bridge we didn't spawn (e.g. one from start-bridge.sh). Guarded
+// against overlap since the poll fires every few seconds and this awaits.
+let syncing = false;
 async function syncBridgeToGame() {
-	const running = await gameRunning();
-	if (running && !bridge && !(await tcpListening(BRIDGE_PORT))) {
-		console.log("[app] FFXIV detected — starting the Deucalion bridge.");
-		startBridge();
-	} else if (!running && bridge) {
-		console.log("[app] FFXIV not running — stopping the bridge (browse mode).");
-		stopBridge();
+	if (syncing) return;
+	syncing = true;
+	try {
+		const running = await gameRunning();
+		if (running && !bridge && !(await tcpListening(BRIDGE_PORT))) {
+			console.log("[app] FFXIV detected — starting the Deucalion bridge.");
+			startBridge();
+		} else if (!running && bridge) {
+			console.log("[app] FFXIV not running — stopping the bridge (browse mode).");
+			stopBridge();
+		}
+	} finally {
+		syncing = false;
 	}
 }
 
