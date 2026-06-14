@@ -40,8 +40,9 @@ export function connect() {
 			mode = msg.mode;
 			render();
 		}
-		// Any message may be the first to populate state.playerMap (via handleZone);
-		// re-evaluate the first-run prompt here so it hides on the first real zone.
-		renderEmptyState();
+		// Re-evaluate the first-run prompt only on messages that can populate
+		// state.playerMap (via handleZone) — not on high-frequency `pos` updates,
+		// which never change it. This hides the prompt on the first real zone.
+		if (msg.type === "state" || msg.type === "zone") renderEmptyState();
 	};
 }
