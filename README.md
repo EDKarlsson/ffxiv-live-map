@@ -59,7 +59,7 @@ daemon serves all map layers regardless of whether a bridge is connected.
 
 ## Quickstart
 
-**Prereqs:** Node ≥ 18, FFXIV running, and **FFXIV Teamcraft desktop with
+**Prereqs:** Node ≥ 20, FFXIV running, and **FFXIV Teamcraft desktop with
 Packet Capture enabled** — Teamcraft injects Deucalion (the packet-capture DLL)
 into the game, and this app attaches to it. (Browse mode needs only Node — see below.)
 
