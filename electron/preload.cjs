@@ -11,7 +11,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("overlay", {
 	// True only in the overlay window itself (main passes --is-overlay) — lets the
 	// renderer show the free-float drag grip there but not in the normal window.
-	isOverlay: process.argv.includes("--is-overlay"),
+	isOverlay: Array.isArray(process?.argv) && process.argv.includes("--is-overlay"),
 	// -> { focused, unfocused, passthrough, placement, bounds }.
 	getConfig: () => ipcRenderer.invoke("overlay:getConfig"),
 	// Persist + apply the two opacities (fractions 0..1).

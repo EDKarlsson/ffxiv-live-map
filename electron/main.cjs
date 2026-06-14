@@ -58,6 +58,7 @@ let quitting = false; // set during teardown so child 'exit' handlers don't trea
 // placement: "center" | one of the 4 corners (recomputed from the work area each
 // launch) | "free" (the user dragged it — remember the exact `bounds` instead).
 const DEFAULT_OVERLAY = { focused: 1, unfocused: 0.55, passthrough: false, placement: "center", bounds: null };
+const PLACEMENTS = ["top-left", "top-right", "bottom-left", "bottom-right", "center", "free"];
 let overlayCfg = { ...DEFAULT_OVERLAY };
 const overlayConfigFile = () => path.join(stateDir(), "overlay-config.json");
 const clamp01 = (n) => Math.max(0, Math.min(1, Number(n) || 0));
@@ -278,24 +279,36 @@ function applyOverlayOpacity() {
 	if (overlay) overlay.setOpacity(overlay.isFocused() ? overlayCfg.focused : overlayCfg.unfocused);
 }
 function applyPassthrough() {
-	// forward:true still delivers move events, so hover works while clicks pass through.
-	if (overlay) overlay.setIgnoreMouseEvents(!!overlayCfg.passthrough, { forward: true });
+	// Only pass clicks through while the overlay is *unfocused*. If it ignored mouse
+	// events even when focused, enabling click-through would make it permanently
+	// non-interactive — you could never uncheck the box. Focus it (⌘-Tab / Dock) to
+	// interact; on blur, clicks fall through to the game again. forward:true keeps
+	// hover working meanwhile.
+	if (overlay) overlay.setIgnoreMouseEvents(!!overlayCfg.passthrough && !overlay.isFocused(), { forward: true });
 }
 
 // Move the overlay to its configured spot. A snapped placement is recomputed from
 // the current display work area (robust to resolution changes); "free" restores
-// the exact bounds the user last dragged it to. `placing` suppresses the 'moved'
-// handler so our own setPosition doesn't get mistaken for a user drag.
+// the exact bounds the user last dragged it to — unless those bounds are now
+// off-screen (e.g. a disconnected monitor), in which case we fall back to a
+// computed spot so the overlay can't restore invisible. `placing` suppresses the
+// 'move' handler so our own setPosition isn't mistaken for a user drag.
 let placing = false;
 function applyPlacement() {
 	if (!overlay) return;
 	placing = true;
 	try {
-		if (overlayCfg.placement === "free" && overlayCfg.bounds) {
-			overlay.setBounds(overlayCfg.bounds);
+		const b = overlayCfg.bounds;
+		const onScreen = b && screen.getAllDisplays().some((d) => {
+			const a = d.bounds;
+			return b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y;
+		});
+		if (overlayCfg.placement === "free" && onScreen) {
+			overlay.setBounds(b);
 		} else {
+			const key = overlayCfg.placement === "free" ? "center" : overlayCfg.placement;
 			const [width, height] = overlay.getSize();
-			const { x, y } = placementPosition(overlayCfg.placement, screen.getPrimaryDisplay().workArea, { width, height });
+			const { x, y } = placementPosition(key, screen.getPrimaryDisplay().workArea, { width, height });
 			overlay.setPosition(x, y);
 		}
 	} finally { placing = false; }
@@ -317,15 +330,20 @@ function createOverlay() {
 	overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 	wireWindowNav(overlay);
 	overlay.loadURL(URL);
-	overlay.on("focus", applyOverlayOpacity);
-	overlay.on("blur", applyOverlayOpacity);
+	// Focus/blur drives both the opacity AND the click-through (so a focused overlay
+	// is interactive even with passthrough enabled).
+	overlay.on("focus", () => { applyOverlayOpacity(); applyPassthrough(); });
+	overlay.on("blur", () => { applyOverlayOpacity(); applyPassthrough(); });
 	overlay.webContents.once("did-finish-load", () => { applyOverlayOpacity(); applyPassthrough(); applyPlacement(); });
-	// A user drag (not our own snap) becomes the new "free" position.
-	overlay.on("moved", () => {
+	// A user drag (not our own snap) becomes the new "free" position. 'move' fires
+	// continuously while dragging, so debounce the synchronous config write.
+	let moveSave = null;
+	overlay.on("move", () => {
 		if (placing) return;
 		overlayCfg.placement = "free";
 		overlayCfg.bounds = overlay.getBounds();
-		saveOverlayConfig();
+		if (moveSave) clearTimeout(moveSave);
+		moveSave = setTimeout(() => { moveSave = null; saveOverlayConfig(); }, 400);
 	});
 	// Frameless, so only the menu/shortcut closes it — and closing restores the
 	// hidden main window (unless we're quitting outright).
@@ -376,6 +394,7 @@ function registerOverlayIpc() {
 		applyPassthrough();
 	});
 	ipcMain.on("overlay:setPlacement", (_e, key) => {
+		if (!PLACEMENTS.includes(key)) return; // ignore anything not from our own UI
 		overlayCfg.placement = key;            // a corner, "center", or "free"
 		if (key !== "free") overlayCfg.bounds = null; // snapped: recompute, don't pin bounds
 		saveOverlayConfig();
