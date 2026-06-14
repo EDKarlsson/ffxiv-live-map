@@ -1,5 +1,5 @@
 import { readFile } from "fs/promises";
-import { dirname, join, extname } from "path";
+import { dirname, join, extname, resolve, sep } from "path";
 import { fileURLToPath } from "url";
 import { db } from "./data-store.mjs";
 import { state } from "./state.mjs";
@@ -108,6 +108,9 @@ const routes = [
 		}
 		if (req.method === "POST") {
 			const m = await readBody(req); // {map, x, y, label, color}
+			if (![m.map, m.x, m.y].every((v) => Number.isFinite(Number(v)))) {
+				res.writeHead(400); res.end("invalid marker"); return true;
+			}
 			const mapId = String(Number(m.map));
 			const marker = { id: Date.now() + Math.floor(Math.random() * 1000), x: m.x, y: m.y, label: m.label || "", color: m.color || "#ffd470", icon: m.icon || "📍" };
 			(customMarkers[mapId] ??= []).push(marker);
@@ -135,7 +138,7 @@ const routes = [
 			if (doc.error) { res.writeHead(404); res.end(JSON.stringify({ error: doc.error.message })); return true; }
 			const fields = doc.fields ?? {};
 			const listName = fields.name?.stringValue ?? listId;
-			const decode = (arr) => (arr ?? []).map((v) => {
+			const decode = (arr) => (arr ?? []).filter((v) => v?.mapValue?.fields).map((v) => {
 				const f = v.mapValue.fields;
 				const id = Number(f.id?.integerValue ?? 0);
 				const amount = Number(f.amount?.integerValue ?? 0);
@@ -201,18 +204,30 @@ const routes = [
 
 export function createRequestHandler() {
 	return async (req, res) => {
-		for (const route of routes) {
-			if (await route(req, res)) return;
-		}
-		// Static fallback: serve files from public/.
-		const file = req.url === "/" ? "index.html" : req.url.slice(1);
 		try {
-			const data = await readFile(join(PUBLIC_DIR, file));
-			res.writeHead(200, { "Content-Type": MIME[extname(file)] ?? "application/octet-stream" });
-			res.end(data);
-		} catch {
-			res.writeHead(404);
-			res.end("not found");
+			for (const route of routes) {
+				if (await route(req, res)) return;
+			}
+			// Static fallback: serve files from public/. Resolve + boundary-check so a
+			// `/../…` URL can't escape the public dir (the daemon binds all interfaces).
+			const file = req.url === "/" ? "index.html" : req.url.slice(1);
+			const full = resolve(PUBLIC_DIR, file);
+			if (full !== PUBLIC_DIR && !full.startsWith(PUBLIC_DIR + sep)) {
+				res.writeHead(403); res.end("forbidden"); return;
+			}
+			try {
+				const data = await readFile(full);
+				res.writeHead(200, { "Content-Type": MIME[extname(file)] ?? "application/octet-stream" });
+				res.end(data);
+			} catch {
+				res.writeHead(404);
+				res.end("not found");
+			}
+		} catch (e) {
+			// A handler threw (e.g. unexpected data shape) — don't leave it as an
+			// unhandled rejection; surface a 500 if nothing was sent yet.
+			console.error("[http] request failed:", e);
+			if (!res.headersSent) { res.writeHead(500); res.end("internal error"); }
 		}
 	};
 }

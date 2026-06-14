@@ -15,4 +15,8 @@ try {
 	console.warn("[markers] could not load:", e.message);
 }
 
-export const saveMarkers = () => writeFileSync(MARKERS_FILE, JSON.stringify(customMarkers));
+export const saveMarkers = () => {
+	// Best-effort persistence — a disk error shouldn't take the daemon down.
+	try { writeFileSync(MARKERS_FILE, JSON.stringify(customMarkers)); }
+	catch (e) { console.warn("[markers] save failed:", e.message); }
+};

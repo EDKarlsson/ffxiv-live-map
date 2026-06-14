@@ -1,12 +1,19 @@
 // Small HTTP helpers shared by the route handlers.
 export const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".json": "application/json" };
 
-// Read + JSON-parse a request body (resolves {} on empty/invalid).
+// Read + JSON-parse a request body (resolves {} on empty/invalid/oversize). The
+// only POST body is a tiny custom-marker; cap at 1 MB so a huge payload can't
+// grow memory without bound.
+const MAX_BODY = 1_000_000;
 export function readBody(req) {
 	return new Promise((resolve) => {
 		let b = "";
-		req.on("data", (c) => (b += c));
+		req.on("data", (c) => {
+			b += c;
+			if (b.length > MAX_BODY) { b = ""; req.destroy(); resolve({}); }
+		});
 		req.on("end", () => { try { resolve(JSON.parse(b || "{}")); } catch { resolve({}); } });
+		req.on("error", () => resolve({}));
 	});
 }
 
