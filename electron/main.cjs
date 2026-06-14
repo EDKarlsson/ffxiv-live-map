@@ -24,12 +24,13 @@
  * with Packet Capture for live position)
  */
 
-const { app, BrowserWindow, Menu, globalShortcut, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, Menu, globalShortcut, ipcMain, screen, dialog, shell } = require("electron");
 const { spawn, execFile } = require("node:child_process");
 const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
 const fs = require("node:fs");
+const { placementPosition } = require("./placement.cjs");
 
 const ROOT = path.join(__dirname, "..");
 // Packaged (asar:false): app files live in Resources/app/, so ROOT/scripts and
@@ -54,7 +55,10 @@ let quitting = false; // set during teardown so child 'exit' handlers don't trea
 
 // Overlay opacity/config, persisted to userData so it survives restarts. Opacities
 // are fractions in [0,1] (Electron's setOpacity); the renderer's sliders send these.
-const DEFAULT_OVERLAY = { focused: 1, unfocused: 0.55, passthrough: false };
+// placement: "center" | one of the 4 corners (recomputed from the work area each
+// launch) | "free" (the user dragged it — remember the exact `bounds` instead).
+const DEFAULT_OVERLAY = { focused: 1, unfocused: 0.55, passthrough: false, placement: "center", bounds: null };
+const PLACEMENTS = ["top-left", "top-right", "bottom-left", "bottom-right", "center", "free"];
 let overlayCfg = { ...DEFAULT_OVERLAY };
 const overlayConfigFile = () => path.join(stateDir(), "overlay-config.json");
 const clamp01 = (n) => Math.max(0, Math.min(1, Number(n) || 0));
@@ -265,6 +269,10 @@ function createWindow() {
 	});
 	win.loadURL(URL);
 	wireWindowNav(win);
+	// ⌘W / the red close button HIDE the main window instead of destroying it, so
+	// it's always recoverable (Dock-click → 'activate' shows it, ⌘⇧O brings it back
+	// after the overlay). A real close only happens during app quit.
+	win.on("close", (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
 	win.on("closed", () => { win = null; });
 }
 
@@ -275,17 +283,54 @@ function applyOverlayOpacity() {
 	if (overlay) overlay.setOpacity(overlay.isFocused() ? overlayCfg.focused : overlayCfg.unfocused);
 }
 function applyPassthrough() {
-	// forward:true still delivers move events, so hover works while clicks pass through.
-	if (overlay) overlay.setIgnoreMouseEvents(!!overlayCfg.passthrough, { forward: true });
+	// Only pass clicks through while the overlay is *unfocused*. If it ignored mouse
+	// events even when focused, enabling click-through would make it permanently
+	// non-interactive — you could never uncheck the box. Focus it (⌘-Tab / Dock) to
+	// interact; on blur, clicks fall through to the game again. forward:true keeps
+	// hover working meanwhile.
+	if (overlay) overlay.setIgnoreMouseEvents(!!overlayCfg.passthrough && !overlay.isFocused(), { forward: true });
+}
+
+// Move the overlay to its configured spot. The window is a fixed-size square, so
+// placement only ever sets the *position*: a snapped placement is recomputed from
+// the current display work area (robust to resolution changes); "free" restores
+// the position the user last dragged it to — unless that's now off-screen (e.g. a
+// disconnected monitor), in which case we fall back to a computed spot so the
+// overlay can't restore invisible. `placing` suppresses the 'move' handler so our
+// own setPosition isn't mistaken for a user drag.
+let placing = false;
+function applyPlacement() {
+	if (!overlay) return;
+	placing = true;
+	try {
+		const b = overlayCfg.bounds;
+		const [width, height] = overlay.getSize();
+		const onScreen = b && screen.getAllDisplays().some((d) => {
+			const a = d.bounds;
+			return b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y;
+		});
+		if (overlayCfg.placement === "free" && onScreen) {
+			overlay.setPosition(b.x, b.y); // position only — size stays the fixed square
+		} else {
+			const key = overlayCfg.placement === "free" ? "center" : overlayCfg.placement;
+			// Snap on the display the main window (and the game) is on, not always the primary.
+			const display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay();
+			const { x, y } = placementPosition(key, display.workArea, { width, height });
+			overlay.setPosition(x, y);
+		}
+	} finally { placing = false; }
 }
 
 function createOverlay() {
 	overlay = new BrowserWindow({
-		width: 520, height: 380,
+		width: 440, height: 440, // fixed square to match the square zone map (no letterbox)
+		resizable: false,        // a fixed-size mini-map; free placement remembers position only
 		title: "FFXIV Live Map — Overlay",
 		transparent: true, frame: false, alwaysOnTop: true, hasShadow: false,
 		backgroundColor: "#00000000",
-		webPreferences: WEB_PREFS,
+		// --is-overlay lets the preload tell the renderer it's the overlay window
+		// (so the free-float drag handle only shows there, not in the normal window).
+		webPreferences: { ...WEB_PREFS, additionalArguments: ["--is-overlay"] },
 	});
 	// "screen-saver" level floats above fullscreen-windowed games; keep it on every
 	// Space so it stays put when you switch to the game.
@@ -293,18 +338,44 @@ function createOverlay() {
 	overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 	wireWindowNav(overlay);
 	overlay.loadURL(URL);
-	overlay.on("focus", applyOverlayOpacity);
-	overlay.on("blur", applyOverlayOpacity);
-	overlay.webContents.once("did-finish-load", () => { applyOverlayOpacity(); applyPassthrough(); });
-	// The overlay is frameless, so only the menu/shortcut closes it — and doing so
-	// drops back to the normal window (unless we're quitting outright).
+	// Focus/blur drives both the opacity AND the click-through (so a focused overlay
+	// is interactive even with passthrough enabled).
+	overlay.on("focus", () => { applyOverlayOpacity(); applyPassthrough(); });
+	overlay.on("blur", () => { applyOverlayOpacity(); applyPassthrough(); });
+	let moveSave = null;
+	overlay.webContents.once("did-finish-load", () => {
+		applyOverlayOpacity();
+		applyPassthrough();
+		applyPlacement();
+		// Register the drag handler only AFTER the initial placement: the OS fires
+		// 'move' events while the window is created/shown, which (with placing still
+		// false) would otherwise clobber a snapped placement to "free" on launch.
+		// A user drag then becomes the new "free" position; 'move' fires continuously
+		// while dragging, so debounce the synchronous config write.
+		overlay.on("move", () => {
+			if (placing) return;
+			overlayCfg.placement = "free";
+			overlayCfg.bounds = overlay.getBounds();
+			if (moveSave) clearTimeout(moveSave);
+			moveSave = setTimeout(() => { moveSave = null; saveOverlayConfig(); }, 400);
+		});
+	});
+	// Frameless, so only the menu/shortcut closes it — and closing restores the
+	// hidden main window (unless we're quitting outright).
 	overlay.on("closed", () => { overlay = null; if (win && !quitting) win.show(); });
 }
 
 function toggleOverlay() {
-	if (overlay) { overlay.close(); return; } // closed handler restores the main window
+	if (overlay) { overlay.close(); return; }
+	// Hide the normal window for a clean single overlay. A frameless,
+	// screen-saver-level window reads as an "accessory" to macOS, which would drop
+	// the app from the Dock + ⌘-Tab — so re-assert the regular activation policy
+	// (and show the Dock icon) right after creating it. Clicking the Dock icon /
+	// ⌘-Tab then focuses the overlay (see the 'activate' handler).
 	if (win) win.hide();
 	createOverlay();
+	if (process.platform === "darwin") app.setActivationPolicy("regular");
+	app.dock?.show();
 }
 
 function buildMenu() {
@@ -336,6 +407,13 @@ function registerOverlayIpc() {
 		overlayCfg.passthrough = !!on;
 		saveOverlayConfig();
 		applyPassthrough();
+	});
+	ipcMain.on("overlay:setPlacement", (_e, key) => {
+		if (!PLACEMENTS.includes(key)) return; // ignore anything not from our own UI
+		overlayCfg.placement = key;            // a corner, "center", or "free"
+		if (key !== "free") overlayCfg.bounds = null; // snapped: recompute, don't pin bounds
+		saveOverlayConfig();
+		applyPlacement();
 	});
 	ipcMain.on("overlay:toggle", () => toggleOverlay());
 }
@@ -371,6 +449,10 @@ if (!app.requestSingleInstanceLock()) {
 	app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
 	app.whenReady().then(async () => {
+		// Stay a regular Dock + ⌘-Tab app even when the always-on-top overlay (which
+		// macOS would otherwise treat as an accessory) is the foreground window.
+		if (process.platform === "darwin") app.setActivationPolicy("regular");
+		app.dock?.show();
 		loadOverlayConfig();   // userData path is only valid after ready
 		registerOverlayIpc();
 		buildMenu();
@@ -384,7 +466,13 @@ if (!app.requestSingleInstanceLock()) {
 			dialog.showErrorBox("FFXIV Live Map — couldn't start", String(err && err.message ? err.message : err));
 			app.quit();
 		}
-		app.on("activate", () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
+		// Dock-icon click / re-activate: focus the overlay if it's up (the main window
+		// is hidden then), else show the main window, else recreate it.
+		app.on("activate", () => {
+			if (overlay) overlay.focus();
+			else if (win) win.show();
+			else createWindow();
+		});
 	});
 
 	// macOS convention: stay alive when the window closes; the dock icon reopens it.

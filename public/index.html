@@ -10,6 +10,7 @@
 <body>
 <div id="map"></div>
 <button id="hudToggle" type="button" title="Hide panel" aria-label="Hide panel" aria-controls="hud" aria-expanded="true">✕</button>
+<div id="overlayDrag" hidden aria-hidden="true" title="Drag to move the overlay">⠿</div>
 <div id="hud">
 	<div class="zone" id="zoneName">No zone yet</div>
 	<select id="mapPicker"></select>
@@ -28,6 +29,15 @@
 		<label>Focused <input type="range" id="ovFocused" min="20" max="100" value="100"> <span id="ovFocusedVal" class="muted">100%</span></label>
 		<label>Unfocused <input type="range" id="ovUnfocused" min="10" max="100" value="55"> <span id="ovUnfocusedVal" class="muted">55%</span></label>
 		<label><input type="checkbox" id="ovPassthrough"> Click-through when unfocused-overlaid</label>
+		<div class="muted" style="margin-top:6px">Placement</div>
+		<div id="ovPlacement">
+			<button type="button" data-place="top-left" title="Top-left" aria-label="Snap overlay to top-left">↖</button>
+			<button type="button" data-place="top-right" title="Top-right" aria-label="Snap overlay to top-right">↗</button>
+			<button type="button" data-place="center" title="Center" aria-label="Center overlay">●</button>
+			<button type="button" data-place="bottom-left" title="Bottom-left" aria-label="Snap overlay to bottom-left">↙</button>
+			<button type="button" data-place="bottom-right" title="Bottom-right" aria-label="Snap overlay to bottom-right">↘</button>
+		</div>
+		<div class="muted" style="font-size:11px">…or drag the grip at the top of the overlay to free-float.</div>
 	</details>
 	<details open><summary>Timed nodes (this map)</summary><div id="timedPanel"></div></details>
 	<details><summary>What's up now (all maps)</summary>

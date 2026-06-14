@@ -8,7 +8,11 @@
 // breakpoint, so resizing always hands control back to the responsive default.
 // The toggle button lives OUTSIDE #hud so it stays reachable while collapsed.
 
-const KEY = "hudManual";             // "open" | "collapsed" | absent (= responsive)
+// The overlay window (Electron) keeps its own override key, so it defaults to the
+// collapsed mini-map — independent of the main window's HUD state — rather than
+// inheriting a stray "open" override and covering the game with the full panel.
+// A 520px overlay is below the breakpoint, so an empty override = collapsed.
+const KEY = (window.overlay && window.overlay.isOverlay) ? "hudManualOverlay" : "hudManual";
 const SMALL_W = 900, SMALL_H = 560;  // collapse below either threshold
 
 const isSmall = () => window.innerWidth < SMALL_W || window.innerHeight < SMALL_H;

@@ -20,11 +20,17 @@ export function initOverlaySettings() {
 	const showF = () => { fVal.textContent = `${fEl.value}%`; };
 	const showU = () => { uVal.textContent = `${uEl.value}%`; };
 
-	// Seed the sliders from the persisted config.
+	// Placement: highlight the active snap button (none when "free" / dragged).
+	const placeWrap = document.getElementById("ovPlacement");
+	const placeBtns = placeWrap ? [...placeWrap.querySelectorAll("button[data-place]")] : [];
+	const markPlacement = (key) => placeBtns.forEach((b) => b.classList.toggle("active", b.dataset.place === key));
+
+	// Seed the controls from the persisted config.
 	api.getConfig().then((cfg) => {
 		fEl.value = fracToPct(cfg.focused); showF();
 		uEl.value = fracToPct(cfg.unfocused); showU();
 		if (pass) pass.checked = !!cfg.passthrough;
+		markPlacement(cfg.placement);
 	});
 
 	const push = () => {
@@ -34,4 +40,13 @@ export function initOverlaySettings() {
 	fEl.addEventListener("input", push);
 	uEl.addEventListener("input", push);
 	if (pass) pass.addEventListener("change", () => api.setPassthrough(pass.checked));
+	placeBtns.forEach((b) => b.addEventListener("click", () => { api.setPlacement(b.dataset.place); markPlacement(b.dataset.place); }));
+
+	// The free-float drag grip only makes sense in the overlay window itself
+	// (dragging it moves that window); the normal window leaves it hidden.
+	if (api.isOverlay) {
+		document.body.classList.add("is-overlay"); // hides Leaflet chrome — see styles.css
+		const grip = document.getElementById("overlayDrag");
+		if (grip) grip.hidden = false;
+	}
 }
