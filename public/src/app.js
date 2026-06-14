@@ -20,6 +20,7 @@ import { initCaptureToggle } from "./features/capture-toggle.js";
 import { initManualPosition } from "./features/manual-position.js";
 import { initHudToggle } from "./features/hud-toggle.js";
 import { initOverlaySettings } from "./features/overlay-settings.js";
+import { initEmptyState } from "./features/empty-state.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,6 +50,7 @@ initCustomMarkers();
 initCaptureToggle();      // wire the browse/capture toggle before connect() (first WS state msg renders it)
 initManualPosition();     // "set position on click" for browse mode
 initOverlaySettings();    // overlay opacity controls (desktop app only; hidden in a browser)
+initEmptyState();         // first-run prompt while no zone/position captured yet (ws.js hides it)
 applySizes();
 buildSizePanel();
 setInterval(tick, 1000);       // ET clock + timed-node panel
