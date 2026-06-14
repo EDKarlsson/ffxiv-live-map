@@ -9,6 +9,17 @@ html, body { margin: 0; height: 100%; background: #15171c; color: #e6e6e6; font-
 }
 #hud .zone { font-weight: 600; }
 #hud .muted { color: #9aa0aa; }
+/* Collapsible HUD: the toggle floats just left of the panel, and moves to the
+   corner when the panel is hidden; body.hud-collapsed hides the panel itself. */
+#hudToggle {
+	position: fixed; top: 14px; right: 274px; z-index: 1001;
+	width: 30px; height: 30px; padding: 0; font-size: 16px; line-height: 1;
+	background: rgba(20, 22, 28, 0.9); color: #e6e6e6; border: 1px solid #444;
+	border-radius: 6px; cursor: pointer;
+}
+#hudToggle:hover { background: #2e323c; }
+body.hud-collapsed #hud { display: none; }
+body.hud-collapsed #hudToggle { right: 14px; }
 #hud select { width: 100%; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px; margin: 4px 0; }
 #hud input[type="text"] { width: 100%; box-sizing: border-box; background: #23262e; color: #e6e6e6; border: 1px solid #444; border-radius: 4px; padding: 3px 6px; margin: 4px 0; }
 #hud label { cursor: pointer; }

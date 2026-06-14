@@ -18,6 +18,7 @@ import { applySizes, buildSizePanel, resetSizes } from "./features/icon-sizes.js
 import { buildPicker } from "./features/map-picker.js";
 import { initCaptureToggle } from "./features/capture-toggle.js";
 import { initManualPosition } from "./features/manual-position.js";
+import { initHudToggle } from "./features/hud-toggle.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -42,6 +43,7 @@ keepZoomBox.checked = (localStorage.getItem("keepZoom") ?? "1") === "1";
 keepZoomBox.onchange = () => localStorage.setItem("keepZoom", keepZoomBox.checked ? "1" : "0");
 
 // --- init panels + timers -----------------------------------------------------
+initHudToggle();   // collapsible HUD (manual toggle + responsive auto-collapse)
 initCustomMarkers();
 initCaptureToggle();   // wire the browse/capture toggle before connect() (first WS state msg renders it)
 initManualPosition();  // "set position on click" for browse mode
