@@ -26,7 +26,9 @@ const ROOT = path.join(__dirname, "..");
 // to userData since the app bundle is read-only.
 const PACKAGED = app.isPackaged;
 const DATA_DIR = PACKAGED ? path.join(process.resourcesPath, "data") : path.join(ROOT, "data");
-const STATE_DIR = PACKAGED ? app.getPath("userData") : ROOT;
+// app.getPath("userData") is only reliable after the app is ready, so resolve
+// STATE_DIR lazily — startStack (its only caller) runs inside app.whenReady().
+const stateDir = () => (PACKAGED ? app.getPath("userData") : ROOT);
 const BRIDGE_PORT = Number(process.env.BRIDGE_PORT || 31595);
 const HTTP_PORT = Number(process.env.HTTP_PORT || 8787);
 const URL = `http://localhost:${HTTP_PORT}`;
@@ -73,7 +75,7 @@ async function startStack() {
 		...process.env,
 		ELECTRON_RUN_AS_NODE: "1",
 		FFXIV_DATA_DIR: DATA_DIR,   // daemon + coords read derived data here
-		FFXIV_STATE_DIR: STATE_DIR, // daemon writes .state.json / custom-markers.json here
+		FFXIV_STATE_DIR: stateDir(), // resolved here, after app ready — daemon writes .state.json / custom-markers.json here
 	};
 	if (PACKAGED) nodeEnv.NODE_ENV = "production"; // serve the minified /dist bundle
 

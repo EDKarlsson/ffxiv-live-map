@@ -5,11 +5,11 @@
  *
  *   node scripts/make-icon.mjs
  */
-import { writeFileSync, mkdirSync, rmSync } from "fs";
-import { deflateSync } from "zlib";
-import { spawnSync } from "child_process";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { deflateSync } from "node:zlib";
+import { spawnSync } from "node:child_process";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BUILD = join(ROOT, "build");
