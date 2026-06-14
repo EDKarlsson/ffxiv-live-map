@@ -12,7 +12,9 @@ html, body { margin: 0; height: 100%; background: #15171c; color: #e6e6e6; font-
 /* Collapsible HUD: the toggle floats just left of the panel, and moves to the
    corner when the panel is hidden; body.hud-collapsed hides the panel itself. */
 #hudToggle {
-	position: fixed; top: 14px; right: 274px; z-index: 1001;
+	/* right = HUD right offset (10) + HUD width (250) + gap (14); kept as a calc so
+	   the coupling to #hud's sizing is explicit and less likely to drift. */
+	position: fixed; top: 14px; right: calc(10px + 250px + 14px); z-index: 1001;
 	width: 30px; height: 30px; padding: 0; font-size: 16px; line-height: 1;
 	background: rgba(20, 22, 28, 0.9); color: #e6e6e6; border: 1px solid #444;
 	border-radius: 6px; cursor: pointer;
