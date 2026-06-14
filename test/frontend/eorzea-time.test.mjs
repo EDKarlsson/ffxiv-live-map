@@ -17,6 +17,7 @@ describe("eorzea time", () => {
 		expect(fmtMins(120)).toBe("2m");
 		expect(fmtMins(3600)).toBe("1h0m");
 		expect(fmtMins(5400)).toBe("1h30m");
+		expect(fmtMins(7199)).toBe("2h0m"); // rounds up cleanly (was "1h60m")
 	});
 
 	it("fmtVT formats HMM-encoded vista times", () => {

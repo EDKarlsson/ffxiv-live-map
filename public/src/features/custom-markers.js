@@ -6,13 +6,17 @@ import { coordLL, pxToCoord } from "../core/coords.js";
 const customLayer = L.layerGroup().addTo(map);
 let placing = false;
 let selectedIcon = "📍";
+
+// Custom-marker labels are the one place free-form user input reaches popup HTML
+// (typed via prompt(), persisted, re-rendered). Escape it to prevent injection.
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 // Emoji render everywhere with no external assets.
 const MARKER_ICONS = ["📍", "⛏️", "🌿", "🎣", "⭐", "❗", "💰", "🗺️", "⚔️", "🏠", "🚩", "🔑"];
 
 function addCustomMarker(cm) {
 	const mk = L.marker(coordLL(cm.x, cm.y), {
 		icon: L.divIcon({ className: "", html: `<div class="custom-pin">${cm.icon || "📍"}</div>`, iconSize: [24, 24], iconAnchor: [12, 22] }),
-	}).bindPopup(`<b>${cm.icon || ""} ${cm.label || "Marker"}</b> <span class="nlvl">(${cm.x.toFixed(1)}, ${cm.y.toFixed(1)})</span><br><a href="#" data-del="${cm.id}">delete</a>`);
+	}).bindPopup(`<b>${esc(cm.icon || "")} ${esc(cm.label || "Marker")}</b> <span class="nlvl">(${cm.x.toFixed(1)}, ${cm.y.toFixed(1)})</span><br><a href="#" data-del="${cm.id}">delete</a>`);
 	mk.on("popupopen", (e) => {
 		e.popup.getElement().querySelector("[data-del]").onclick = async (ev) => {
 			ev.preventDefault();

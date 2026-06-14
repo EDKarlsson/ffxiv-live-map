@@ -17,7 +17,12 @@ export function nodeStatus(n) {
 	return { up: false, secsLeft: best * 175 };
 }
 
-export const fmtMins = (s) => s >= 3600 ? `${Math.floor(s / 3600)}h${Math.round((s % 3600) / 60)}m` : `${Math.max(0, Math.round(s / 60))}m`;
+export const fmtMins = (s) => {
+	// Round to whole minutes first, then split into h/m — rounding the minute
+	// part independently could produce "1h60m" (e.g. 7199s).
+	const mins = Math.max(0, Math.round(s / 60));
+	return mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60}m` : `${mins}m`;
+};
 
 // Vista sightseeing-log ET windows (HMM-encoded, e.g. 1159 = 11:59).
 export const fmtVT = (t) => `${String(Math.floor(t / 100)).padStart(2, "0")}:${String(t % 100).padStart(2, "0")}`;
