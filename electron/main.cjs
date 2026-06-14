@@ -313,7 +313,9 @@ function applyPlacement() {
 			overlay.setPosition(b.x, b.y); // position only — size stays the fixed square
 		} else {
 			const key = overlayCfg.placement === "free" ? "center" : overlayCfg.placement;
-			const { x, y } = placementPosition(key, screen.getPrimaryDisplay().workArea, { width, height });
+			// Snap on the display the main window (and the game) is on, not always the primary.
+			const display = win ? screen.getDisplayMatching(win.getBounds()) : screen.getPrimaryDisplay();
+			const { x, y } = placementPosition(key, display.workArea, { width, height });
 			overlay.setPosition(x, y);
 		}
 	} finally { placing = false; }
@@ -340,16 +342,23 @@ function createOverlay() {
 	// is interactive even with passthrough enabled).
 	overlay.on("focus", () => { applyOverlayOpacity(); applyPassthrough(); });
 	overlay.on("blur", () => { applyOverlayOpacity(); applyPassthrough(); });
-	overlay.webContents.once("did-finish-load", () => { applyOverlayOpacity(); applyPassthrough(); applyPlacement(); });
-	// A user drag (not our own snap) becomes the new "free" position. 'move' fires
-	// continuously while dragging, so debounce the synchronous config write.
 	let moveSave = null;
-	overlay.on("move", () => {
-		if (placing) return;
-		overlayCfg.placement = "free";
-		overlayCfg.bounds = overlay.getBounds();
-		if (moveSave) clearTimeout(moveSave);
-		moveSave = setTimeout(() => { moveSave = null; saveOverlayConfig(); }, 400);
+	overlay.webContents.once("did-finish-load", () => {
+		applyOverlayOpacity();
+		applyPassthrough();
+		applyPlacement();
+		// Register the drag handler only AFTER the initial placement: the OS fires
+		// 'move' events while the window is created/shown, which (with placing still
+		// false) would otherwise clobber a snapped placement to "free" on launch.
+		// A user drag then becomes the new "free" position; 'move' fires continuously
+		// while dragging, so debounce the synchronous config write.
+		overlay.on("move", () => {
+			if (placing) return;
+			overlayCfg.placement = "free";
+			overlayCfg.bounds = overlay.getBounds();
+			if (moveSave) clearTimeout(moveSave);
+			moveSave = setTimeout(() => { moveSave = null; saveOverlayConfig(); }, 400);
+		});
 	});
 	// Frameless, so only the menu/shortcut closes it — and closing restores the
 	// hidden main window (unless we're quitting outright).
