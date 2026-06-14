@@ -17,7 +17,7 @@ const doc = new win.DOMParser().parseFromString(html, "text/html");
 
 describe("index.html HUD structure", () => {
 	const ids = [
-		"map", "hud", "zoneName", "mapPicker", "contentOnly", "followToggle", "keepZoom",
+		"map", "hud", "hudToggle", "zoneName", "mapPicker", "contentOnly", "followToggle", "keepZoom",
 		"coordsText", "findMe", "captureToggle", "manualPos", "nodeCount", "etClock", "timedPanel",
 		"upJob", "upLevel", "upOnly", "upList",
 		"mobSearch", "mobList", "npcSearch", "npcQuest", "npcVendor", "npcInfo",
