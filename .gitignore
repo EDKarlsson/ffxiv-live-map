@@ -3,6 +3,7 @@ node_modules/
 .DS_Store
 .state.json
 custom-markers.json
+overlay-config.json
 scripts/.tc-cache/
 
 # Test coverage reports

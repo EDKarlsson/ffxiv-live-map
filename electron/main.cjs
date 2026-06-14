@@ -1,5 +1,5 @@
 /**
- * ffxiv-live-map — Electron shell (PR 1 of the mini-map overlay).
+ * ffxiv-live-map — Electron shell.
  *
  * This is the desktop wrapper: on launch it brings up the daemon itself and
  * shows the existing Leaflet map in a normal window instead of a browser tab.
@@ -11,6 +11,11 @@
  * dead-ends on a "bridge never came up" error. The daemon's own game monitor
  * attaches/detaches capture in lockstep.
  *
+ * Overlay mode (View menu / ⌘⇧O) re-opens that same UI in a transparent,
+ * frameless, always-on-top window that floats over the game. Its opacity is a
+ * window property, so the renderer's sliders set it over IPC (preload.cjs); the
+ * window fades to the user's "unfocused" opacity on blur and back on focus.
+ *
  * CommonJS on purpose: the package is "type": "module", but Electron's main
  * entry is simplest and most portable as .cjs. The daemon (ESM) runs unchanged
  * as a child process, so nothing in src/ has to change.
@@ -19,11 +24,12 @@
  * with Packet Capture for live position)
  */
 
-const { app, BrowserWindow, dialog, shell } = require("electron");
+const { app, BrowserWindow, Menu, globalShortcut, ipcMain, dialog, shell } = require("electron");
 const { spawn, execFile } = require("node:child_process");
 const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
+const fs = require("node:fs");
 
 const ROOT = path.join(__dirname, "..");
 // Packaged (asar:false): app files live in Resources/app/, so ROOT/scripts and
@@ -42,8 +48,25 @@ const URL = `http://localhost:${HTTP_PORT}`;
 let bridge = null;
 let daemon = null;
 let win = null;
+let overlay = null;   // the transparent always-on-top overlay window, when shown
 let gameWatch = null; // interval that keeps the bridge in lockstep with the game
 let quitting = false; // set during teardown so child 'exit' handlers don't treat it as a crash
+
+// Overlay opacity/config, persisted to userData so it survives restarts. Opacities
+// are fractions in [0,1] (Electron's setOpacity); the renderer's sliders send these.
+const DEFAULT_OVERLAY = { focused: 1, unfocused: 0.55, passthrough: false };
+let overlayCfg = { ...DEFAULT_OVERLAY };
+const overlayConfigFile = () => path.join(stateDir(), "overlay-config.json");
+const clamp01 = (n) => Math.max(0, Math.min(1, Number(n) || 0));
+
+function loadOverlayConfig() {
+	try { overlayCfg = { ...DEFAULT_OVERLAY, ...JSON.parse(fs.readFileSync(overlayConfigFile(), "utf-8")) }; }
+	catch { overlayCfg = { ...DEFAULT_OVERLAY }; }
+}
+function saveOverlayConfig() {
+	try { fs.writeFileSync(overlayConfigFile(), JSON.stringify(overlayCfg)); }
+	catch (e) { console.warn("[app] overlay config save failed:", e.message); }
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -204,6 +227,33 @@ async function startStack() {
 	startGameWatch();
 }
 
+// Shared hardening for any window that loads our localhost UI: deny in-app popups
+// (open external http(s) links — GarlandTools, Teamcraft, wiki — in the real
+// browser, refuse everything else), and bounce off-localhost top-level
+// navigations out to the browser, so a compromised page can't load another
+// origin/protocol inside a privileged window.
+function wireWindowNav(w) {
+	w.webContents.setWindowOpenHandler(({ url }) => {
+		if (/^https?:\/\//.test(url)) shell.openExternal(url);
+		return { action: "deny" };
+	});
+	w.webContents.on("will-navigate", (event, navUrl) => {
+		let u;
+		try { u = new URL(navUrl); } catch { return; }
+		if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return;
+		event.preventDefault();
+		if (u.protocol === "http:" || u.protocol === "https:") shell.openExternal(navUrl);
+	});
+}
+
+// sandbox: defense-in-depth — the renderer only loads our localhost UI. The
+// preload is a tiny contextBridge (window.overlay) and needs no Node, so the OS
+// sandbox stays on and shrinks the blast radius if any loaded page is compromised.
+const WEB_PREFS = {
+	contextIsolation: true, nodeIntegration: false, sandbox: true,
+	preload: path.join(__dirname, "preload.cjs"),
+};
+
 function createWindow() {
 	win = new BrowserWindow({
 		width: 1200,
@@ -211,33 +261,83 @@ function createWindow() {
 		title: "FFXIV Live Map",
 		backgroundColor: "#15171c",
 		autoHideMenuBar: true,
-		// sandbox: defense-in-depth — the renderer only loads our localhost UI
-		// (no preload needs Node), so the OS sandbox costs nothing and shrinks the
-		// blast radius if any loaded page is ever compromised.
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
+		webPreferences: WEB_PREFS,
 	});
 	win.loadURL(URL);
-	// Deny every in-app popup. The UI's only external links are http(s)
-	// (GarlandTools, Teamcraft, wiki) opened with target="_blank" — hand those to
-	// the real browser and refuse everything else (file:, javascript:, custom
-	// schemes) so a compromised page can't open a window into another protocol.
-	win.webContents.setWindowOpenHandler(({ url }) => {
-		if (/^https?:\/\//.test(url)) shell.openExternal(url);
-		return { action: "deny" };
-	});
-	// Pin the window to our localhost UI. setWindowOpenHandler only covers popups
-	// (window.open / target="_blank"); a *top-level* navigation — a link without
-	// target, a redirect, a location change — would otherwise load an external page
-	// inside this privileged window. Bounce any off-localhost navigation to the
-	// real browser (http(s) only) and cancel it here.
-	win.webContents.on("will-navigate", (event, navUrl) => {
-		let u;
-		try { u = new URL(navUrl); } catch { return; }
-		if (u.hostname === "localhost" || u.hostname === "127.0.0.1") return;
-		event.preventDefault();
-		if (u.protocol === "http:" || u.protocol === "https:") shell.openExternal(navUrl);
-	});
+	wireWindowNav(win);
 	win.on("closed", () => { win = null; });
+}
+
+// --- Overlay window: the same UI, but transparent, frameless, and floating above
+// the game. Opacity is a window property (not CSS), set here on focus/blur from
+// the user-configured values. Toggled via the View menu / ⌘⇧O.
+function applyOverlayOpacity() {
+	if (overlay) overlay.setOpacity(overlay.isFocused() ? overlayCfg.focused : overlayCfg.unfocused);
+}
+function applyPassthrough() {
+	// forward:true still delivers move events, so hover works while clicks pass through.
+	if (overlay) overlay.setIgnoreMouseEvents(!!overlayCfg.passthrough, { forward: true });
+}
+
+function createOverlay() {
+	overlay = new BrowserWindow({
+		width: 520, height: 380,
+		title: "FFXIV Live Map — Overlay",
+		transparent: true, frame: false, alwaysOnTop: true, hasShadow: false,
+		backgroundColor: "#00000000",
+		webPreferences: WEB_PREFS,
+	});
+	// "screen-saver" level floats above fullscreen-windowed games; keep it on every
+	// Space so it stays put when you switch to the game.
+	overlay.setAlwaysOnTop(true, "screen-saver");
+	overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+	wireWindowNav(overlay);
+	overlay.loadURL(URL);
+	overlay.on("focus", applyOverlayOpacity);
+	overlay.on("blur", applyOverlayOpacity);
+	overlay.webContents.once("did-finish-load", () => { applyOverlayOpacity(); applyPassthrough(); });
+	// The overlay is frameless, so only the menu/shortcut closes it — and doing so
+	// drops back to the normal window (unless we're quitting outright).
+	overlay.on("closed", () => { overlay = null; if (win && !quitting) win.show(); });
+}
+
+function toggleOverlay() {
+	if (overlay) { overlay.close(); return; } // closed handler restores the main window
+	if (win) win.hide();
+	createOverlay();
+}
+
+function buildMenu() {
+	const isMac = process.platform === "darwin";
+	const template = [
+		...(isMac ? [{ role: "appMenu" }] : []),
+		{
+			label: "View",
+			submenu: [
+				{ label: "Toggle Overlay", accelerator: "CmdOrCtrl+Shift+O", click: toggleOverlay },
+				{ type: "separator" },
+				{ role: "reload" }, { role: "toggleDevTools" }, { role: "togglefullscreen" },
+			],
+		},
+		{ role: "windowMenu" },
+	];
+	Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function registerOverlayIpc() {
+	ipcMain.handle("overlay:getConfig", () => overlayCfg);
+	ipcMain.on("overlay:setOpacities", (_e, { focused, unfocused }) => {
+		overlayCfg.focused = clamp01(focused);
+		overlayCfg.unfocused = clamp01(unfocused);
+		saveOverlayConfig();
+		applyOverlayOpacity();
+	});
+	ipcMain.on("overlay:setPassthrough", (_e, on) => {
+		overlayCfg.passthrough = !!on;
+		saveOverlayConfig();
+		applyPassthrough();
+	});
+	ipcMain.on("overlay:toggle", () => toggleOverlay());
 }
 
 function killStack() {
@@ -271,9 +371,15 @@ if (!app.requestSingleInstanceLock()) {
 	app.on("second-instance", () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 
 	app.whenReady().then(async () => {
+		loadOverlayConfig();   // userData path is only valid after ready
+		registerOverlayIpc();
+		buildMenu();
 		try {
 			await startStack();
 			createWindow();
+			// Global (system-wide) shortcut so you can flip into overlay mode even
+			// while the game window is focused.
+			globalShortcut.register("CommandOrControl+Shift+O", toggleOverlay);
 		} catch (err) {
 			dialog.showErrorBox("FFXIV Live Map — couldn't start", String(err && err.message ? err.message : err));
 			app.quit();
@@ -283,6 +389,7 @@ if (!app.requestSingleInstanceLock()) {
 
 	// macOS convention: stay alive when the window closes; the dock icon reopens it.
 	app.on("window-all-closed", () => { if (process.platform !== "darwin") app.quit(); });
+	app.on("will-quit", () => globalShortcut.unregisterAll());
 	app.on("before-quit", killStack);
 	app.on("quit", killStack);
 
