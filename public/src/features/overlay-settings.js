@@ -45,6 +45,7 @@ export function initOverlaySettings() {
 	// The free-float drag grip only makes sense in the overlay window itself
 	// (dragging it moves that window); the normal window leaves it hidden.
 	if (api.isOverlay) {
+		document.body.classList.add("is-overlay"); // hides Leaflet chrome — see styles.css
 		const grip = document.getElementById("overlayDrag");
 		if (grip) grip.hidden = false;
 	}

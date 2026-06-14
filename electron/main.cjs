@@ -269,6 +269,10 @@ function createWindow() {
 	});
 	win.loadURL(URL);
 	wireWindowNav(win);
+	// ⌘W / the red close button HIDE the main window instead of destroying it, so
+	// it's always recoverable (Dock-click → 'activate' shows it, ⌘⇧O brings it back
+	// after the overlay). A real close only happens during app quit.
+	win.on("close", (e) => { if (!quitting) { e.preventDefault(); win.hide(); } });
 	win.on("closed", () => { win = null; });
 }
 
@@ -287,27 +291,28 @@ function applyPassthrough() {
 	if (overlay) overlay.setIgnoreMouseEvents(!!overlayCfg.passthrough && !overlay.isFocused(), { forward: true });
 }
 
-// Move the overlay to its configured spot. A snapped placement is recomputed from
+// Move the overlay to its configured spot. The window is a fixed-size square, so
+// placement only ever sets the *position*: a snapped placement is recomputed from
 // the current display work area (robust to resolution changes); "free" restores
-// the exact bounds the user last dragged it to — unless those bounds are now
-// off-screen (e.g. a disconnected monitor), in which case we fall back to a
-// computed spot so the overlay can't restore invisible. `placing` suppresses the
-// 'move' handler so our own setPosition isn't mistaken for a user drag.
+// the position the user last dragged it to — unless that's now off-screen (e.g. a
+// disconnected monitor), in which case we fall back to a computed spot so the
+// overlay can't restore invisible. `placing` suppresses the 'move' handler so our
+// own setPosition isn't mistaken for a user drag.
 let placing = false;
 function applyPlacement() {
 	if (!overlay) return;
 	placing = true;
 	try {
 		const b = overlayCfg.bounds;
+		const [width, height] = overlay.getSize();
 		const onScreen = b && screen.getAllDisplays().some((d) => {
 			const a = d.bounds;
 			return b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y;
 		});
 		if (overlayCfg.placement === "free" && onScreen) {
-			overlay.setBounds(b);
+			overlay.setPosition(b.x, b.y); // position only — size stays the fixed square
 		} else {
 			const key = overlayCfg.placement === "free" ? "center" : overlayCfg.placement;
-			const [width, height] = overlay.getSize();
 			const { x, y } = placementPosition(key, screen.getPrimaryDisplay().workArea, { width, height });
 			overlay.setPosition(x, y);
 		}
@@ -316,7 +321,8 @@ function applyPlacement() {
 
 function createOverlay() {
 	overlay = new BrowserWindow({
-		width: 520, height: 380,
+		width: 440, height: 440, // fixed square to match the square zone map (no letterbox)
+		resizable: false,        // a fixed-size mini-map; free placement remembers position only
 		title: "FFXIV Live Map — Overlay",
 		transparent: true, frame: false, alwaysOnTop: true, hasShadow: false,
 		backgroundColor: "#00000000",
