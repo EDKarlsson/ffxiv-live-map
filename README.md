@@ -105,10 +105,12 @@ npm run browse
 ```
 
 `npm run browse` opens the same map at <http://localhost:8787> but with **no
-packet capture** — no Deucalion bridge and no running game required. It's handy
+packet capture** — no Deucalion bridge and no running game required, so the
+**Prereqs** above don't apply: browse mode needs only Node and npm. It's handy
 as a reference while you play on PS5 (or any time FFXIV isn't running on this
 Mac): pick any map, plan routes, and look things up. You can still toggle capture
-on from the UI, and the daemon auto-attaches if it detects the Mac game.
+on from the UI — that's when Teamcraft and a running game are needed — and the
+daemon auto-attaches if it detects the Mac game.
 
 ### Desktop app (experimental)
 
