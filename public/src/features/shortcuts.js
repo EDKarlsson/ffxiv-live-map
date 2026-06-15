@@ -59,17 +59,23 @@ let capturing = false; // true while the editor is waiting for a rebind keystrok
 
 export function initShortcuts() {
 	// Global dispatcher: a matched combo runs its action. Skipped while typing or
-	// rebinding, on pure-modifier presses, or once another handler consumed the key.
+	// rebinding, on pure-modifier presses, once another handler consumed the key,
+	// or while the Settings modal is open (you're configuring shortcuts there, so a
+	// stray single-key press shouldn't fire a map action behind the dialog).
 	document.addEventListener("keydown", (e) => {
 		if (capturing || e.defaultPrevented) return;
+		const modal = document.getElementById("settingsModal");
+		if (modal && !modal.hidden) return;
 		if (isTypingTarget(e.target) || MOD_KEYS.has(e.key)) return;
 		const b = effectiveBindings(getCustom()).find((x) => x.combo === comboFromEvent(e));
 		if (b) { e.preventDefault(); b.run(); }
 	});
-	renderEditor();
+	renderShortcutEditor();
 }
 
-function renderEditor() {
+// Exported so "Reset all settings" (settings-menu.js) can refresh the editor after
+// it clears the shared store — otherwise the chips would show stale bindings.
+export function renderShortcutEditor() {
 	const list = document.getElementById("shortcutList");
 	if (!list) return;
 	// Built with DOM methods + textContent (not innerHTML): a combo can flow from a
@@ -89,10 +95,11 @@ function renderEditor() {
 		list.append(row);
 	}
 	const reset = document.getElementById("shortcutsReset");
-	if (reset) reset.onclick = () => { setSetting("shortcuts", {}); renderEditor(); };
+	if (reset) reset.onclick = () => { setSetting("shortcuts", {}); renderShortcutEditor(); };
 }
 
 function startRebind(actionId, btn) {
+	if (capturing) return; // a rebind is already in progress — don't stack listeners
 	capturing = true;
 	btn.classList.add("capturing");
 	btn.textContent = "press a key…";
@@ -101,20 +108,30 @@ function startRebind(actionId, btn) {
 		// reaches the global dispatcher (and can't fire the action it would bind).
 		e.preventDefault();
 		e.stopImmediatePropagation();
-		if (e.key === "Escape") { finish(); return; }   // cancel, keep the old binding
-		if (MOD_KEYS.has(e.key)) return;                 // wait for a non-modifier
+		if (e.key === "Escape") { finish(false); return; } // cancel, keep the old binding
+		if (MOD_KEYS.has(e.key)) return;                    // wait for a non-modifier
 		const combo = comboFromEvent(e);
 		const conflict = findConflict(effectiveBindings(getCustom()), combo, actionId);
 		if (conflict) { btn.textContent = `${prettyCombo(combo)} — in use`; return; } // keep capturing
 		const custom = getCustom();
 		custom[actionId] = combo;
 		setSetting("shortcuts", custom);
-		finish();
+		finish(true);
 	};
-	function finish() {
+	// Any click elsewhere (close button, backdrop, another chip) cancels the capture
+	// — otherwise closing the modal mid-rebind would leave `capturing` stuck true and
+	// the listener attached, breaking every shortcut until reload.
+	const onClickOutside = (e) => { if (!btn.contains(e.target)) finish(false); };
+	function finish(saved) {
 		capturing = false;
 		document.removeEventListener("keydown", onKey, true);
-		renderEditor();
+		document.removeEventListener("mousedown", onClickOutside, true);
+		if (saved) { renderShortcutEditor(); return; }
+		// Restore this chip in place (avoid re-rendering mid-event-propagation).
+		btn.classList.remove("capturing");
+		const current = effectiveBindings(getCustom()).find((b) => b.id === actionId);
+		btn.textContent = current ? prettyCombo(current.combo) : "";
 	}
 	document.addEventListener("keydown", onKey, true);
+	document.addEventListener("mousedown", onClickOutside, true);
 }

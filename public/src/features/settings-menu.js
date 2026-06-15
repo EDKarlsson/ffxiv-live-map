@@ -6,6 +6,7 @@
 import { getSetting, setSetting, resetSettings } from "../core/settings.js";
 import { setFollow } from "../core/view-map.js";
 import { resetSizes } from "./icon-sizes.js";
+import { renderShortcutEditor } from "./shortcuts.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -47,5 +48,6 @@ export function initSettings() {
 		keep.checked = getSetting("keepZoom", true);  // …then re-apply defaults to the live UI
 		setFollow(getSetting("follow", true)); // setFollow re-checks #followToggle too
 		resetSizes();                           // clears iconSizes + re-applies + rebuilds the panel
+		renderShortcutEditor();                 // shortcuts were cleared too — refresh the chips
 	};
 }
