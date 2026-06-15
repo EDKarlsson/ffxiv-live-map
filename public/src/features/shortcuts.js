@@ -6,14 +6,18 @@ import { getSetting, setSetting } from "../core/settings.js";
 
 const clickEl = (id) => document.getElementById(id)?.click();
 
-// The bindable actions and their default keys. open-search (⌘K) is reserved for
-// the search popup (#24); the overlay toggle stays on Electron's global ⌘⇧O.
+// The bindable actions and their default keys. Most just click the existing
+// control; open-search opens the spotlight popup (#24). The overlay toggle stays
+// on Electron's global ⌘⇧O (a browser binding would double-fire).
 const ACTIONS = [
 	{ id: "find-me",        label: "Find me",          default: "f",       run: () => clickEl("findMe") },
 	{ id: "toggle-follow",  label: "Toggle follow",    default: "shift+f", run: () => clickEl("followToggle") },
 	{ id: "toggle-capture", label: "Toggle capture",   default: "c",       run: () => clickEl("captureToggle") },
 	{ id: "toggle-hud",     label: "Toggle HUD panel", default: "h",       run: () => clickEl("hudToggle") },
 	{ id: "open-settings",  label: "Open settings",    default: ",",       run: () => clickEl("settingsBtn") },
+	// Decoupled via an event (not an import) so this module stays Leaflet-free and
+	// unit-testable; search.js listens for it (#24).
+	{ id: "open-search",    label: "Open search",      default: "meta+k",  run: () => document.dispatchEvent(new CustomEvent("flm:open-search")) },
 ];
 
 const MOD_KEYS = new Set(["Shift", "Control", "Alt", "Meta"]);
@@ -64,9 +68,12 @@ export function initShortcuts() {
 	// stray single-key press shouldn't fire a map action behind the dialog).
 	document.addEventListener("keydown", (e) => {
 		if (capturing || e.defaultPrevented) return;
-		const modal = document.getElementById("settingsModal");
-		if (modal && !modal.hidden) return;
-		if (isTypingTarget(e.target) || MOD_KEYS.has(e.key)) return;
+		// Don't fire while an app modal is open (you're interacting with it).
+		if (document.querySelector("#settingsModal:not([hidden]), #searchModal:not([hidden])")) return;
+		if (MOD_KEYS.has(e.key)) return;
+		// While typing, only Ctrl/Cmd-modified shortcuts may fire (e.g. ⌘K to open
+		// search) — a single key must never be swallowed out of a text field.
+		if (isTypingTarget(e.target) && !(e.ctrlKey || e.metaKey)) return;
 		const b = effectiveBindings(getCustom()).find((x) => x.combo === comboFromEvent(e));
 		if (b) { e.preventDefault(); b.run(); }
 	});

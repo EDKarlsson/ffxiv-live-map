@@ -11,11 +11,7 @@ export async function buildPicker() {
 	for (const m of allMaps) mapNameById[m.id] = mapLabel(m);
 	renderPicker();
 	const sel = document.getElementById("mapPicker");
-	sel.onchange = async () => {
-		if (!sel.value) return;
-		setFollow(false);
-		viewMap(await fetch(`/map?id=${sel.value}`).then((r) => r.json()));
-	};
+	sel.onchange = () => { if (sel.value) goToMap(sel.value); };
 	document.getElementById("contentOnly").onchange = renderPicker;
 	if (state.viewedMap) applyPickerSelection(state.viewedMap); // options loaded after first zone restore
 }
@@ -35,6 +31,27 @@ export function renderPicker() {
 			.map((m) => `<option value="${m.id}">${mapLabel(m)}</option>`).join("") +
 		`</optgroup>`).join("");
 	if (state.viewedMap) sel.value = String(state.viewedMap.id);
+}
+
+// Switch to a map by id (used by the picker and the search popup, #24).
+export async function goToMap(id) {
+	setFollow(false);
+	viewMap(await fetch(`/map?id=${id}`).then((r) => r.json()));
+}
+
+// Filter the loaded maps by name for the search popup (#24) → [{id, label}].
+export function searchZones(q, limit = 20) {
+	const needle = q.trim().toLowerCase();
+	if (!needle) return [];
+	const hits = [];
+	for (const m of allMaps) {
+		const label = mapLabel(m);
+		if (label.toLowerCase().includes(needle)) {
+			hits.push({ id: m.id, label });
+			if (hits.length >= limit) break;
+		}
+	}
+	return hits;
 }
 
 // Reflect the viewed map in the picker + zone label (works once options exist).

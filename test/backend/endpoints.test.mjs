@@ -162,6 +162,22 @@ describe("daemon HTTP endpoints (characterization)", () => {
 		expect(JSON.parse(readFileSync(settingsFile, "utf-8")).captureEnabled).toBe(false);
 	});
 
+	it("GET /search?cat=npc -> array of {name, map}", async () => {
+		// Pick a real NPC name from the built data so the query always has a hit.
+		const npcDb = JSON.parse(readFileSync(join(root, "data/npcs.json"), "utf-8"));
+		const name = Object.values(npcDb).flat().find((n) => n.name && n.name.length >= 3)?.name;
+		expect(name).toBeTruthy();
+		const hits = await json(`/search?cat=npc&q=${encodeURIComponent(name.slice(0, 4).toLowerCase())}`);
+		expect(Array.isArray(hits)).toBe(true);
+		expect(hits.length).toBeGreaterThan(0);
+		expect(hits[0]).toHaveProperty("name");
+		expect(hits[0]).toHaveProperty("map");
+	});
+
+	it("GET /search with <2 chars -> []", async () => {
+		expect(await json("/search?cat=npc&q=a")).toEqual([]);
+	});
+
 	it("unknown path -> 404", async () => {
 		expect((await fetch(`${base}/no-such-endpoint`)).status).toBe(404);
 	});

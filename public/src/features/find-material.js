@@ -7,7 +7,7 @@ import { viewMap, setFollow } from "../core/view-map.js";
 export const matLayer = L.layerGroup().addTo(map);
 let matTimer = null;
 
-async function matJump(hit) {
+export async function matJump(hit) {
 	// Prefer a node on the viewed map; otherwise go to the item's first map.
 	const n = hit.nodes.find((x) => x.map === state.viewedMap?.id) ?? hit.nodes[0];
 	if (!n) return;

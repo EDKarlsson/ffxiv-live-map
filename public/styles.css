@@ -64,6 +64,27 @@ button.kbd:hover { border-color: #6db3ff; }
 button.kbd.capturing { background: #3a5d88; border-color: #6db3ff; color: #fff; }
 .shortcut-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .shortcut-foot .muted { font-size: 11px; margin: 0; }
+/* Spotlight-style search popup (#24): an input + results list dropped from the
+   top. Sits above the settings modal's z-index. */
+#searchModal:not([hidden]) {
+	position: fixed; inset: 0; z-index: 2100;
+	display: flex; align-items: flex-start; justify-content: center;
+	background: rgba(0, 0, 0, 0.45); padding-top: 12vh;
+}
+.search-card {
+	width: 520px; max-width: calc(100vw - 32px);
+	background: rgba(20, 22, 28, 0.98); border: 1px solid #333; border-radius: 10px;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); overflow: hidden;
+}
+#searchInput {
+	width: 100%; box-sizing: border-box; border: none; outline: none;
+	background: #23262e; color: #e6e6e6; font-size: 15px; padding: 12px 14px;
+}
+#searchResults { max-height: 50vh; overflow-y: auto; }
+.sresult { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding: 7px 14px; cursor: pointer; }
+.sresult:hover, .sresult.active { background: #2e4a6e; }
+.sresult .smeta { color: #9aa0aa; font-size: 11px; white-space: nowrap; }
+.search-hint { padding: 7px 14px; border-top: 1px solid #2a2d35; }
 /* The overlay mini-map hides Leaflet's chrome (layer control + attribution) so it
    doesn't cover the game; the normal window keeps them (set by overlay-settings.js). */
 body.is-overlay .leaflet-control-layers,

@@ -43,6 +43,16 @@
 		<div class="muted">Capture on/off is remembered and restored on launch.</div>
 	</div>
 </div>
+<!-- Spotlight-style search popup (#24): opened with ⌘K (the #26 open-search
+     shortcut). Bare text searches zones; /category and @site refine it. -->
+<div id="searchModal" hidden role="dialog" aria-modal="true" aria-label="Search">
+	<div class="search-card">
+		<input id="searchInput" type="text" autocomplete="off" spellcheck="false"
+			placeholder="Search zones…  ·  /npc /material /monster  ·  @garlandtools @universalis">
+		<div id="searchResults"></div>
+		<div class="search-hint muted">Enter to go · ↑↓ to navigate · Esc to close · /category · @site</div>
+	</div>
+</div>
 <div id="overlayDrag" hidden aria-hidden="true" title="Drag to move the overlay">⠿</div>
 <div id="hud">
 	<div class="zone" id="zoneName">No zone yet</div>

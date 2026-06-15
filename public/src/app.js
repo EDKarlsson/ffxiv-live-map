@@ -22,6 +22,7 @@ import { initOverlaySettings } from "./features/overlay-settings.js";
 import { initEmptyState } from "./features/empty-state.js";
 import { initSettings } from "./features/settings-menu.js";
 import { initShortcuts } from "./features/shortcuts.js";
+import { initSearch } from "./features/search.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -43,6 +44,7 @@ $("findMe").onclick = findMe;
 // state before connect() (a WS state restore can call viewMap immediately, which
 // reads the keep-zoom checkbox).
 initSettings();    // settings menu (#12): keep-zoom / follow / resets, persisted
+initSearch();      // spotlight search popup (#24): ⌘K — wired before initShortcuts
 initShortcuts();   // customizable keyboard shortcuts (#26): editor lives in the modal
 initHudToggle();   // collapsible HUD (manual toggle + responsive auto-collapse)
 initCustomMarkers();
