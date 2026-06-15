@@ -7,6 +7,7 @@ import { customMarkers, saveMarkers } from "./markers-store.mjs";
 import { readBody, MIME, mapParam, getParam, sendJson } from "./http-util.mjs";
 import { mapById } from "./coords.mjs";
 import { enableCapture, disableCapture } from "./capture.mjs";
+import { setDaemonSetting } from "./settings-store.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = join(__dirname, "../public");
@@ -218,6 +219,9 @@ const routes = [
 			const { on } = await readBody(req);
 			if (typeof on !== "boolean") { res.writeHead(400); res.end("expected { on: boolean }"); return true; }
 			if (on) enableCapture(); else await disableCapture();
+			// Persist the choice so it's restored on the next launch (#12). The
+			// daemon's startup precedence applies it: CLI flag > this > default.
+			setDaemonSetting("captureEnabled", on);
 			sendJson(res, { mode: state.capture }); return true;
 		}
 		return false;

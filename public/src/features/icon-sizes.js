@@ -1,6 +1,8 @@
-// Per-category icon sizes, CSS-variable driven, persisted to localStorage. The
-// sliders set --sz-* on :root; marker CSS scales inner elements live, so nothing
-// needs re-rendering.
+// Per-category icon sizes, CSS-variable driven, persisted via the shared settings
+// store (one namespaced key, see core/settings.js). The sliders set --sz-* on
+// :root; marker CSS scales inner elements live, so nothing needs re-rendering.
+import { getSetting, setSetting } from "../core/settings.js";
+
 const SIZE_CATS = [
 	["maplabel", "Map labels"],
 	["poi", "Map POIs"],
@@ -16,8 +18,10 @@ const SIZE_CATS = [
 	["player", "Player dot"],
 ];
 
-let iconSizes = {};
-try { iconSizes = JSON.parse(localStorage.getItem("iconSizes") ?? "{}"); } catch { /* fresh */ }
+// getSetting can return any JSON type if storage is corrupt; coerce to a plain
+// object so the slider handler's `iconSizes[k] =` can't throw.
+const storedSizes = getSetting("iconSizes", {});
+let iconSizes = storedSizes != null && typeof storedSizes === "object" && !Array.isArray(storedSizes) ? storedSizes : {};
 
 export function applySizes() {
 	for (const [key] of SIZE_CATS) {
@@ -38,7 +42,7 @@ export function buildSizePanel() {
 			const k = sl.dataset.k;
 			iconSizes[k] = Number(sl.value);
 			document.getElementById(`szv-${k}`).textContent = `${sl.value}×`;
-			localStorage.setItem("iconSizes", JSON.stringify(iconSizes));
+			setSetting("iconSizes", iconSizes);
 			applySizes();
 		};
 	});
@@ -46,7 +50,7 @@ export function buildSizePanel() {
 
 export function resetSizes() {
 	iconSizes = {};
-	localStorage.removeItem("iconSizes");
+	setSetting("iconSizes", {});
 	applySizes();
 	buildSizePanel();
 }

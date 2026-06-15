@@ -2,7 +2,6 @@
 // groups (their top-level code runs once); this file then wires every DOM event
 // handler and kicks off the initial data loads. Keeping all wiring here lets the
 // feature modules stay side-effect-free at import (and unit-testable).
-import { setFollow } from "./core/view-map.js";
 import { connect } from "./core/ws.js";
 import { findMe } from "./core/player.js";
 import { tick } from "./layers/nodes.js";
@@ -21,6 +20,7 @@ import { initManualPosition } from "./features/manual-position.js";
 import { initHudToggle } from "./features/hud-toggle.js";
 import { initOverlaySettings } from "./features/overlay-settings.js";
 import { initEmptyState } from "./features/empty-state.js";
+import { initSettings } from "./features/settings-menu.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -36,15 +36,12 @@ $("routeClear").onclick = clearRoute;
 $("listImport").onclick = listImport;
 $("sizeReset").onclick = resetSizes;
 $("findMe").onclick = findMe;
-$("followToggle").onchange = (e) => setFollow(e.target.checked);
-
-// Zoom-reset on map switch is configurable (persisted). Set before any viewMap
-// runs (a WebSocket state restore can call viewMap immediately on connect).
-const keepZoomBox = $("keepZoom");
-keepZoomBox.checked = (localStorage.getItem("keepZoom") ?? "1") === "1";
-keepZoomBox.onchange = () => localStorage.setItem("keepZoom", keepZoomBox.checked ? "1" : "0");
 
 // --- init panels + timers -----------------------------------------------------
+// Settings first: it restores persisted keep-zoom / follow into the DOM + live
+// state before connect() (a WS state restore can call viewMap immediately, which
+// reads the keep-zoom checkbox).
+initSettings();    // settings menu (#12): keep-zoom / follow / resets, persisted
 initHudToggle();   // collapsible HUD (manual toggle + responsive auto-collapse)
 initCustomMarkers();
 initCaptureToggle();      // wire the browse/capture toggle before connect() (first WS state msg renders it)
