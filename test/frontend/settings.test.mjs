@@ -28,6 +28,15 @@ describe("settings (namespaced config store)", () => {
 		expect(s.getSetting("a", "def")).toBe("def");
 	});
 
+	it("tolerates a corrupt (non-object) stored value without throwing", async () => {
+		localStorage.setItem("flm:settings", JSON.stringify("not-an-object"));
+		vi.resetModules();
+		const s = await importFresh();
+		expect(s.getSetting("x", "def")).toBe("def");          // coerced back to {}
+		expect(() => s.setSetting("x", 1)).not.toThrow();      // would throw on a primitive cache
+		expect(s.getSetting("x", "def")).toBe(1);
+	});
+
 	it("migrates the legacy keepZoom + iconSizes keys on first load (no regression)", async () => {
 		localStorage.setItem("keepZoom", "0");                      // old format: "1"/"0"
 		localStorage.setItem("iconSizes", JSON.stringify({ node: 2 }));

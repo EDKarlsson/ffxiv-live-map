@@ -9,8 +9,15 @@ import { resetSizes } from "./icon-sizes.js";
 
 const $ = (id) => document.getElementById(id);
 
-export function openSettings() { $("settingsModal").hidden = false; }
-export function closeSettings() { $("settingsModal").hidden = true; }
+export function openSettings() {
+	$("settingsModal").hidden = false;
+	$("settingsClose").focus(); // move focus into the dialog for keyboard / screen-reader users
+}
+export function closeSettings() {
+	if ($("settingsModal").hidden) return; // already closed — don't steal focus back to the gear
+	$("settingsModal").hidden = true;
+	$("settingsBtn").focus(); // return focus to the control that opened it
+}
 
 export function initSettings() {
 	// Keep-zoom: restore the persisted value into the checkbox. view-map.js reads
@@ -19,23 +26,26 @@ export function initSettings() {
 	keep.checked = getSetting("keepZoom", true);
 	keep.onchange = () => setSetting("keepZoom", keep.checked);
 
-	// Follow: restore the persisted default into live state (+ checkbox) via
-	// setFollow, then persist on change.
+	// Follow: setFollow is the single place that sets state.follow AND syncs the
+	// #followToggle checkbox, so restoring the persisted default updates both.
+	const follow = $("followToggle");
 	setFollow(getSetting("follow", true));
-	$("followToggle").onchange = (e) => { setFollow(e.target.checked); setSetting("follow", e.target.checked); };
+	follow.onchange = () => { setFollow(follow.checked); setSetting("follow", follow.checked); };
 
 	// Open / close: gear opens; the ✕, a backdrop click, and Esc close.
 	$("settingsBtn").onclick = openSettings;
 	$("settingsClose").onclick = closeSettings;
 	$("settingsModal").addEventListener("click", (e) => { if (e.target.id === "settingsModal") closeSettings(); });
-	document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSettings(); });
+	// Esc closes only when the dialog is open, so it doesn't shadow other Escape
+	// semantics (and can't fight the focus-restore when nothing is open).
+	document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("settingsModal").hidden) closeSettings(); });
 
 	// Resets.
 	$("sizeResetModal").onclick = resetSizes;
 	$("settingsReset").onclick = () => {
 		resetSettings();                        // clear the namespaced store…
 		keep.checked = getSetting("keepZoom", true);  // …then re-apply defaults to the live UI
-		setFollow(getSetting("follow", true));
+		setFollow(getSetting("follow", true)); // setFollow re-checks #followToggle too
 		resetSizes();                           // clears iconSizes + re-applies + rebuilds the panel
 	};
 }

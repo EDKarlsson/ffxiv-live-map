@@ -5,8 +5,13 @@
 // otherwise crash boot — so a failure degrades to in-memory-only for the session.
 const KEY = "flm:settings";
 
+// Coerce anything that isn't a plain object (corrupt or hand-edited storage —
+// a string/number/array) back to {}, so setSetting()'s `cache[key] =` can't throw
+// on a primitive at boot.
+const isPlainObject = (v) => v != null && typeof v === "object" && !Array.isArray(v);
+
 let cache = (() => {
-	try { return JSON.parse(localStorage.getItem(KEY) ?? "{}") || {}; }
+	try { const v = JSON.parse(localStorage.getItem(KEY) ?? "{}"); return isPlainObject(v) ? v : {}; }
 	catch { return {}; }
 })();
 

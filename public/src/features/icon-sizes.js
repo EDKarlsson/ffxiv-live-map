@@ -18,7 +18,10 @@ const SIZE_CATS = [
 	["player", "Player dot"],
 ];
 
-let iconSizes = getSetting("iconSizes", {}) ?? {};
+// getSetting can return any JSON type if storage is corrupt; coerce to a plain
+// object so the slider handler's `iconSizes[k] =` can't throw.
+const storedSizes = getSetting("iconSizes", {});
+let iconSizes = storedSizes != null && typeof storedSizes === "object" && !Array.isArray(storedSizes) ? storedSizes : {};
 
 export function applySizes() {
 	for (const [key] of SIZE_CATS) {
