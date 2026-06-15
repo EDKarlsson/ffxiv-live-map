@@ -199,6 +199,37 @@ const routes = [
 		sendJson(res, db.mapsIndex); return true;
 	},
 	(req, res) => {
+		if (!req.url.startsWith("/search")) return false;
+		// Global name search for the command palette (#24). cat=npc|monster; returns
+		// a uniform [{name, sub, map, x, y}] (cap 20) so the popup can jump straight to
+		// the result. npc/monster data is per-map elsewhere; this scans it server-side.
+		const cat = getParam(req, "cat");
+		const q = (getParam(req, "q") ?? "").trim().toLowerCase();
+		if (q.length < 2) { sendJson(res, []); return true; }
+		const hits = [];
+		if (cat === "npc") {
+			outer: for (const [mapId, npcs] of Object.entries(db.npcDb)) {
+				for (const n of npcs) {
+					if (n.name.toLowerCase().includes(q) || (n.title ?? "").toLowerCase().includes(q)) {
+						hits.push({ name: n.name, sub: n.title ?? "", map: Number(mapId), x: n.x, y: n.y });
+						if (hits.length >= 20) break outer;
+					}
+				}
+			}
+		} else if (cat === "monster") {
+			for (const [id, name] of Object.entries(db.mobNames)) {
+				if (!name.toLowerCase().includes(q)) continue;
+				const maps = db.mobMaps[id] ?? [];
+				if (!maps.length) continue;
+				const map = maps[0];
+				const pt = db.monsterDb[String(map)]?.[id]?.points?.[0];
+				hits.push({ name, sub: maps.length > 1 ? `${maps.length} maps` : "", map: Number(map), x: pt?.x, y: pt?.y });
+				if (hits.length >= 20) break;
+			}
+		}
+		sendJson(res, hits); return true;
+	},
+	(req, res) => {
 		if (!req.url.startsWith("/map?")) return false;
 		sendJson(res, mapById(Number(getParam(req, "id")))); return true;
 	},
