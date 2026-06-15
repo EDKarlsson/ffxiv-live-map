@@ -49,6 +49,21 @@ body.hud-collapsed #settingsBtn { right: calc(14px + 36px); }
 .settings-card label { display: block; margin: 8px 0; cursor: pointer; }
 .settings-actions { display: flex; gap: 8px; margin: 12px 0 6px; }
 .settings-card .muted { color: #9aa0aa; font-size: 12px; margin-top: 6px; }
+/* Keyboard-shortcut editor (#26): one row per action, the binding shown as a
+   clickable key chip that captures the next keystroke when armed. */
+.settings-shortcuts { margin-top: 10px; border-top: 1px solid #333; padding-top: 8px; }
+.settings-shortcuts summary { cursor: pointer; font-weight: 600; }
+#shortcutList { margin: 6px 0; }
+#shortcutList .srow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
+button.kbd {
+	min-width: 64px; font: 600 12px/1 ui-monospace, monospace;
+	background: #23262e; color: #e6e6e6; border: 1px solid #4a6a92; border-radius: 4px;
+	padding: 4px 8px; cursor: pointer;
+}
+button.kbd:hover { border-color: #6db3ff; }
+button.kbd.capturing { background: #3a5d88; border-color: #6db3ff; color: #fff; }
+.shortcut-foot { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.shortcut-foot .muted { font-size: 11px; margin: 0; }
 /* The overlay mini-map hides Leaflet's chrome (layer control + attribution) so it
    doesn't cover the game; the normal window keeps them (set by overlay-settings.js). */
 body.is-overlay .leaflet-control-layers,
